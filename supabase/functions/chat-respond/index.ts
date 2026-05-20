@@ -1,0 +1,107 @@
+// POST /functions/v1/chat-respond
+// Body: { delivery_id: string, contenu: string }
+// Auth: Bearer <user JWT>
+import { preflight, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { userClient, serviceClient } from '../_shared/supabase.ts';
+import { callAI, ensureTrailingChoice } from '../_shared/ai.ts';
+import { SYSTEM_PROMPT_CHAT, type Lettre } from '../_shared/prompts.ts';
+
+interface AIChat {
+  message: string;
+  score_lettre: Lettre;
+  score_valeur: number;
+}
+
+const responseSchema = {
+  type: 'object',
+  properties: {
+    message: { type: 'string' },
+    score_lettre: { type: 'string', enum: ['C', 'H', 'O', 'I', 'X'] },
+    score_valeur: { type: 'integer', minimum: 0, maximum: 20 },
+  },
+  required: ['message', 'score_lettre', 'score_valeur'],
+};
+
+Deno.serve(async (req) => {
+  const pre = preflight(req);
+  if (pre) return pre;
+  if (req.method !== 'POST') return errorResponse(405, 'Method not allowed');
+
+  let payload: { delivery_id?: string; contenu?: string };
+  try {
+    payload = await req.json();
+  } catch {
+    return errorResponse(400, 'Invalid JSON');
+  }
+  const { delivery_id, contenu } = payload;
+  if (!delivery_id || !contenu || contenu.trim().length === 0) {
+    return errorResponse(400, 'Missing delivery_id or contenu');
+  }
+  if (contenu.length > 4000) return errorResponse(400, 'Réponse trop longue (4000 max)');
+
+  const sb = userClient(req);
+  const { data: userRes, error: userErr } = await sb.auth.getUser();
+  if (userErr || !userRes.user) return errorResponse(401, 'Non authentifié');
+  const userId = userRes.user.id;
+
+  // Récupère la delivery + question + prénom
+  const { data: delivery, error: delErr } = await sb
+    .from('question_deliveries')
+    .select('id, user_id, question_id, questions(lettre, texte), profiles!inner(prenom)')
+    .eq('id', delivery_id)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (delErr || !delivery) return errorResponse(404, 'Question introuvable');
+
+  const q = (delivery as any).questions;
+  const prenom = (delivery as any).profiles.prenom as string;
+  const lettre = q.lettre as Lettre;
+
+  const systemPrompt = SYSTEM_PROMPT_CHAT({ prenom, lettre, questionTexte: q.texte });
+
+  let ai: AIChat;
+  try {
+    const result = await callAI<AIChat>(systemPrompt, contenu, responseSchema);
+    ai = result.data;
+  } catch (err) {
+    console.error('AI error', err);
+    return errorResponse(502, 'Le service IA est momentanément indisponible');
+  }
+
+  if (ai.score_lettre !== lettre) ai.score_lettre = lettre;
+  const score = Math.max(0, Math.min(20, Math.round(ai.score_valeur)));
+  const message = ensureTrailingChoice(ai.message);
+
+  // Insertion via service role pour bypass RLS si besoin
+  const admin = serviceClient();
+  const { data: inserted, error: insErr } = await admin
+    .from('responses')
+    .insert({
+      delivery_id,
+      user_id: userId,
+      question_id: q.id ?? delivery.question_id,
+      lettre,
+      contenu,
+      score,
+      ai_feedback: message,
+    })
+    .select('id, created_at')
+    .single();
+  if (insErr) {
+    console.error('Insert response error', insErr);
+    return errorResponse(500, 'Impossible d\'enregistrer la réponse');
+  }
+
+  await admin
+    .from('question_deliveries')
+    .update({ answered_at: new Date().toISOString(), opened_at: new Date().toISOString() })
+    .eq('id', delivery_id);
+
+  return jsonResponse({
+    response_id: inserted.id,
+    message,
+    score,
+    lettre,
+  });
+});

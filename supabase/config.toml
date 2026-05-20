@@ -1,0 +1,10 @@
+project_id = "baba-iassou3"
+
+[functions.chat-respond]
+verify_jwt = true
+
+[functions.send-question]
+verify_jwt = true
+
+[functions.final-verse]
+verify_jwt = true
