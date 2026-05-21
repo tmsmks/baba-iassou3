@@ -1,8 +1,20 @@
 import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable } from 'react-native';
+import { Image, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import { useSessionStore } from '@/store/session';
+import { assets } from '@/lib/assets';
+
+function LogoTitle() {
+  return (
+    <Image
+      source={assets.logo}
+      style={styles.logo}
+      resizeMode="contain"
+      accessibilityLabel="baba IAssou3"
+    />
+  );
+}
 
 export default function TabsLayout() {
   const t = useTheme();
@@ -12,9 +24,10 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: true,
-        headerStyle: { backgroundColor: t.bg },
+        headerStyle: { backgroundColor: t.bg, height: 110 },
         headerTintColor: t.text,
         headerTitleStyle: { fontWeight: '800' },
+        headerTitleAlign: 'center',
         tabBarStyle: {
           backgroundColor: t.bg,
           borderTopColor: t.border,
@@ -37,7 +50,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="chat"
         options={{
-          title: 'baba IAssou3',
+          title: '',
+          headerTitle: () => <LogoTitle />,
           tabBarLabel: 'Chat',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubble-ellipses" size={size} color={color} />
@@ -62,3 +76,7 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  logo: { width: 280, height: 78 },
+});

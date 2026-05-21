@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { z } from 'zod';
 import { Screen } from '@/components/Screen';
 import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
 import { font, spacing, useTheme } from '@/lib/theme';
+import { assets } from '@/lib/assets';
 import { supabase } from '@/lib/supabase';
 
 const schema = z.object({
@@ -53,10 +54,15 @@ export default function Register() {
     <Screen>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Text style={[styles.title, { color: t.text }]}>Bienvenue,{'\n'}quel est ton prénom ?</Text>
-          <Text style={[styles.sub, { color: t.textMuted }]}>
-            baba IAssou3 l'utilisera pour s'adresser personnellement à toi.
-          </Text>
+          <View style={styles.hero}>
+            <View style={styles.heroText}>
+              <Text style={[styles.title, { color: t.text }]}>Bienvenue,{'\n'}quel est ton prénom ?</Text>
+              <Text style={[styles.sub, { color: t.textMuted }]}>
+                baba IAssou3 l'utilisera pour s'adresser personnellement à toi.
+              </Text>
+            </View>
+            <Image source={assets.mascot} style={styles.mascot} resizeMode="contain" />
+          </View>
           <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
             <TextField
               label="Prénom"
@@ -93,6 +99,14 @@ export default function Register() {
 
 const styles = StyleSheet.create({
   scroll: { paddingVertical: spacing.xl, gap: spacing.sm },
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  heroText: { flex: 1, gap: spacing.sm },
+  mascot: { width: 110, height: 140 },
   title: { fontSize: font.display, fontWeight: '800', lineHeight: 34 },
   sub: { fontSize: font.body, marginTop: spacing.sm },
 });

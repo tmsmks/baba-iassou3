@@ -20,7 +20,7 @@ export async function ensureAndroidChannel(): Promise<void> {
     name: 'Questions de baba IAssou3',
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 200, 300, 200],
-    lightColor: '#C9A961',
+    lightColor: '#C9973A',
     sound: 'default',
   });
 }

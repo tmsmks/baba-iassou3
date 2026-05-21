@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Link } from 'expo-router';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
@@ -10,6 +10,7 @@ import { Screen } from '@/components/Screen';
 import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
 import { font, spacing, useTheme } from '@/lib/theme';
+import { assets } from '@/lib/assets';
 import { supabase } from '@/lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -98,13 +99,15 @@ export default function Login() {
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>
-            <Text style={[styles.kicker, { color: t.accent }]}>baba IAssou3</Text>
-            <Text style={[styles.title, { color: t.text }]}>
-              Avant tout choix,{'\n'}laisse-Le te parler.
-            </Text>
-            <Text style={[styles.sub, { color: t.textMuted }]}>
-              10ème édition « Suis-moi » — Les choix.
-            </Text>
+            <View style={styles.heroText}>
+              <Text style={[styles.title, { color: t.text }]}>
+                Avant tout choix,{'\n'}laisse-Le te parler.
+              </Text>
+              <Text style={[styles.sub, { color: t.textMuted }]}>
+                10ème édition « Suis-moi » — Les choix.
+              </Text>
+            </View>
+            <Image source={assets.mascot} style={styles.mascot} resizeMode="contain" />
           </View>
 
           <View style={{ gap: spacing.md }}>
@@ -167,7 +170,14 @@ export default function Login() {
 
 const styles = StyleSheet.create({
   scroll: { paddingVertical: spacing.xl, gap: spacing.xl },
-  hero: { gap: spacing.sm, marginTop: spacing.lg },
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  heroText: { flex: 1, gap: spacing.sm },
+  mascot: { width: 130, height: 170 },
   kicker: { fontSize: font.caption, fontWeight: '800', letterSpacing: 2, textTransform: 'uppercase' },
   title: { fontSize: font.display, fontWeight: '800', lineHeight: 34 },
   sub: { fontSize: font.body },

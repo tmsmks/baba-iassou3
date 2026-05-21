@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,6 +42,7 @@ export default function Admin() {
         <SendQuestionCard />
         <ConferenceStateCard />
         <ProgramEditorCard />
+        <DangerZoneCard />
       </ScrollView>
     </Screen>
   );
@@ -321,6 +323,106 @@ function ProgramEditorCard() {
           ),
         )}
       </View>
+    </View>
+  );
+}
+
+function DangerZoneCard() {
+  const t = useTheme();
+  const userId = useSessionStore((s) => s.user?.id);
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+
+  const resetConversation = async () => {
+    if (!userId) return;
+    setBusy(true);
+    try {
+      // CASCADE: supprimer les deliveries efface aussi les responses (trigger jauges).
+      const { data: deleted, error } = await supabase
+        .from('question_deliveries')
+        .delete()
+        .eq('user_id', userId)
+        .select('id');
+      if (error) throw error;
+      if (!deleted?.length) {
+        Alert.alert(
+          'Rien à effacer',
+          'Aucune question enregistrée, ou permission refusée. Si le problème persiste, applique la migration Supabase 0005_self_delete_policies.sql.',
+        );
+        return;
+      }
+      qc.setQueryData(['chat-thread', userId], []);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['chat-thread', userId] }),
+        qc.invalidateQueries({ queryKey: ['gauges', userId] }),
+      ]);
+      Alert.alert('Conversation effacée', 'Tes messages et tes jauges ont été remis à zéro.');
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message ?? 'Échec de la réinitialisation');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetFinalVerse = async () => {
+    if (!userId) return;
+    setBusy(true);
+    try {
+      const { data: deleted, error } = await supabase
+        .from('final_verse')
+        .delete()
+        .eq('user_id', userId)
+        .select('user_id');
+      if (error) throw error;
+      if (!deleted?.length) {
+        Alert.alert('Rien à effacer', 'Aucun verset final enregistré pour ton compte.');
+        return;
+      }
+      Alert.alert('Verset effacé', 'Tu pourras en regénérer un.');
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message ?? 'Échec');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirm = (title: string, message: string, action: () => Promise<void>) => {
+    Alert.alert(title, message, [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Effacer', style: 'destructive', onPress: action },
+    ]);
+  };
+
+  return (
+    <View style={[card(t), { borderColor: t.danger }]}>
+      <Text style={[h2(t), { color: t.danger }]}>Zone de test</Text>
+      <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+        Réservé aux comptes admin pour tester l'app. Ces actions n'affectent QUE ton propre compte.
+      </Text>
+      <Button
+        label="Réinitialiser ma conversation"
+        variant="danger"
+        loading={busy}
+        onPress={() =>
+          confirm(
+            'Réinitialiser ?',
+            "Toutes tes questions reçues, réponses et jauges seront effacées. Action irréversible.",
+            resetConversation,
+          )
+        }
+      />
+      <Button
+        label="Effacer mon verset final"
+        variant="ghost"
+        loading={busy}
+        onPress={() =>
+          confirm(
+            'Effacer le verset ?',
+            'Tu pourras en regénérer un en rouvrant la carte finale.',
+            resetFinalVerse,
+          )
+        }
+      />
     </View>
   );
 }

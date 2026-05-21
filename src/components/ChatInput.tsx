@@ -30,7 +30,15 @@ export function ChatInput({ disabled, sending, onSend, placeholder }: Props) {
         placeholder={placeholder ?? 'Écris ta réponse à baba IAssou3…'}
         placeholderTextColor={t.textMuted}
         multiline
-        style={[styles.input, { color: t.text }]}
+        keyboardAppearance={t.isDark ? 'dark' : 'light'}
+        style={[
+          styles.input,
+          {
+            color: t.text,
+            backgroundColor: t.surfaceAlt,
+            borderColor: t.border,
+          },
+        ]}
       />
       <Pressable
         onPress={handleSend}
@@ -61,7 +69,12 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: font.body,
+    lineHeight: 22,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    minHeight: 44,
     maxHeight: 140,
   },
   btn: {

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { font, lettreColors, radius, spacing, useTheme } from '@/lib/theme';
+import { assets } from '@/lib/assets';
 import { fetchFinalVerse } from '@/lib/ai';
 import type { FinalVerse } from '@/types/database';
 
@@ -65,6 +66,9 @@ export default function VersetFinal() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: spacing.xl, gap: spacing.lg }}>
+          <View style={styles.mascotRow}>
+            <Image source={assets.mascot} style={styles.mascot} resizeMode="contain" />
+          </View>
           <View style={[styles.tag, { backgroundColor: lettreColors[verse.lettre_faible] }]}>
             <Text style={styles.tagTxt}>Pour ta lettre « {verse.lettre_faible} »</Text>
           </View>
@@ -96,6 +100,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  mascotRow: { alignItems: 'center' },
+  mascot: { width: 120, height: 160 },
   tag: {
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,

@@ -78,7 +78,7 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="admin" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="admin/index" options={{ presentation: 'modal' }} />
             <Stack.Screen name="verset-final" options={{ presentation: 'modal' }} />
           </Stack>
         </QueryClientProvider>

@@ -1,4 +1,34 @@
 import type { ExpoConfig } from 'expo/config';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const here = (p: string) => resolve(__dirname, p);
+const exists = (p: string) => existsSync(here(p));
+
+/** Projet EAS @thomakss/baba-iassou3 (non secret — requis en dur pour config dynamique). */
+const EAS_PROJECT_ID =
+  process.env.EAS_PROJECT_ID ?? '13774dbb-5248-4fb7-8451-13dcb08c09d9';
+const EXPO_OWNER = process.env.EXPO_OWNER ?? 'thomakss';
+
+// Fallback : si pas d'icon.png dédié, on utilise la mascotte.
+const iconPath = exists('./assets/icon.png')
+  ? './assets/icon.png'
+  : exists('./assets/mascot.png')
+    ? './assets/mascot.png'
+    : undefined;
+const adaptiveIconPath = exists('./assets/adaptive-icon.png')
+  ? './assets/adaptive-icon.png'
+  : iconPath;
+const splashPath = exists('./assets/splash.png') ? './assets/splash.png' : undefined;
+const notifIconPath = exists('./assets/notification-icon.png')
+  ? './assets/notification-icon.png'
+  : undefined;
+const googleServicesPath =
+  process.env.GOOGLE_SERVICES_JSON && existsSync(process.env.GOOGLE_SERVICES_JSON)
+    ? process.env.GOOGLE_SERVICES_JSON
+    : exists('./google-services.json')
+      ? './google-services.json'
+      : undefined;
 
 const config: ExpoConfig = {
   name: 'baba IAssou3',
@@ -6,13 +36,17 @@ const config: ExpoConfig = {
   scheme: 'babaiassou3',
   version: '1.0.0',
   orientation: 'portrait',
-  icon: './assets/icon.png',
+  ...(iconPath ? { icon: iconPath } : {}),
   userInterfaceStyle: 'automatic',
-  splash: {
-    image: './assets/splash.png',
-    resizeMode: 'contain',
-    backgroundColor: '#1A1230',
-  },
+  ...(splashPath
+    ? {
+        splash: {
+          image: splashPath,
+          resizeMode: 'contain',
+          backgroundColor: '#1A1208',
+        },
+      }
+    : {}),
   assetBundlePatterns: ['**/*'],
   ios: {
     supportsTablet: false,
@@ -26,20 +60,30 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'church.suismoi.babaiassou3',
-    adaptiveIcon: {
-      foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#1A1230',
-    },
-    googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? './google-services.json',
+    ...(adaptiveIconPath
+      ? {
+          adaptiveIcon: {
+            foregroundImage: adaptiveIconPath,
+            backgroundColor: '#1A1208',
+          },
+        }
+      : {}),
+    ...(googleServicesPath ? { googleServicesFile: googleServicesPath } : {}),
     permissions: ['NOTIFICATIONS', 'POST_NOTIFICATIONS'],
   },
-  notification: {
-    icon: './assets/notification-icon.png',
-    color: '#C9A961',
-    iosDisplayInForeground: true,
-    androidMode: 'default',
-  },
+  ...(notifIconPath
+    ? {
+        notification: {
+          icon: notifIconPath,
+          color: '#C9973A',
+          iosDisplayInForeground: true,
+          androidMode: 'default',
+        },
+      }
+    : {}),
   plugins: [
+    './plugins/withFmtXcode26Fix.js',
+    'expo-dev-client',
     'expo-router',
     'expo-secure-store',
     'expo-font',
@@ -47,8 +91,8 @@ const config: ExpoConfig = {
     [
       'expo-notifications',
       {
-        icon: './assets/notification-icon.png',
-        color: '#C9A961',
+        ...(notifIconPath ? { icon: notifIconPath } : {}),
+        color: '#C9973A',
         sounds: [],
       },
     ],
@@ -57,14 +101,12 @@ const config: ExpoConfig = {
   extra: {
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-    eas: { projectId: process.env.EAS_PROJECT_ID ?? '' },
+    eas: { projectId: EAS_PROJECT_ID },
   },
-  owner: process.env.EXPO_OWNER,
+  owner: EXPO_OWNER,
   runtimeVersion: { policy: 'appVersion' },
   updates: {
-    url: process.env.EAS_PROJECT_ID
-      ? `https://u.expo.dev/${process.env.EAS_PROJECT_ID}`
-      : undefined,
+    url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
   },
 };
 
