@@ -10,6 +10,7 @@ export interface Profile {
   prenom: string;
   provider: AuthProvider;
   is_admin: boolean;
+  onboarding_completed_at: string | null;
   created_at: string;
 }
 
@@ -26,6 +27,7 @@ export interface Question {
   lettre: Lettre;
   texte: string;
   ordre: number;
+  is_onboarding: boolean;
   created_at: string;
 }
 
@@ -92,6 +94,15 @@ export interface ProgramItem {
   ordre: number;
 }
 
+export interface Chant {
+  id: string;
+  titre: string;
+  url: string;
+  ordre: number;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -105,6 +116,7 @@ export interface Database {
       conference_state: { Row: ConferenceState; Insert: never; Update: Partial<ConferenceState> };
       program: { Row: ProgramItem; Insert: Omit<ProgramItem, 'id'>; Update: Partial<ProgramItem> };
       program_favorites: { Row: { user_id: string; program_id: string; created_at: string }; Insert: { user_id: string; program_id: string }; Update: never };
+      chants: { Row: Chant; Insert: Omit<Chant, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<Chant> };
     };
   };
 }

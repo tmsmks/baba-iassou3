@@ -8,7 +8,9 @@ import * as Notifications from 'expo-notifications';
 import { useColorScheme } from 'react-native';
 import { useSessionBootstrap } from '@/hooks/useSession';
 import { useSessionStore } from '@/store/session';
-import { registerForPushAndStore, isQuestionPayload } from '@/lib/notifications';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
+import { isQuestionPayload } from '@/lib/notifications';
+import { usePushRegistration } from '@/hooks/usePushRegistration';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,22 +21,24 @@ const queryClient = new QueryClient({
 
 function Bootstrap() {
   useSessionBootstrap();
+  useRealtimeSync();
+  usePushRegistration();
   const user = useSessionStore((s) => s.user);
   const loading = useSessionStore((s) => s.loading);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
   const receivedListener = useRef<Notifications.EventSubscription | null>(null);
 
+  const profile = useSessionStore((s) => s.profile);
   useEffect(() => {
     if (loading) return;
     if (!user) {
       router.replace('/(auth)/login');
-    } else {
-      registerForPushAndStore(user.id).catch((e) =>
-        console.warn('Push register failed', e),
-      );
+    } else if (profile && !profile.onboarding_completed_at) {
+      router.replace('/onboarding');
+    } else if (profile) {
       router.replace('/(tabs)/chat');
     }
-  }, [user, loading]);
+  }, [user, loading, profile]);
 
   useEffect(() => {
     responseListener.current = Notifications.addNotificationResponseReceivedListener((resp) => {
@@ -80,6 +84,8 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="admin/index" options={{ presentation: 'modal' }} />
             <Stack.Screen name="verset-final" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="tutoriel" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="onboarding" />
           </Stack>
         </QueryClientProvider>
       </SafeAreaProvider>

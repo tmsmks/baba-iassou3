@@ -19,9 +19,9 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "REPLACE_WITH_APPLE_ID",
-        "ascAppId": "REPLACE_WITH_ASC_APP_ID",
-        "appleTeamId": "REPLACE_WITH_TEAM_ID"
+        "appleId": "thomas.maksimous@icloud.com",
+        "ascAppId": "6771836371",
+        "appleTeamId": "MLK2A2UZ6J"
       },
       "android": {
         "serviceAccountKeyPath": "./google-play-service-account.json",

@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -12,12 +14,13 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '@/components/Screen';
 import { ChatBubble } from '@/components/ChatBubble';
 import { ChatInput } from '@/components/ChatInput';
 import { font, spacing, useTheme } from '@/lib/theme';
 import { useChatThread, useSendChatResponse } from '@/hooks/useChat';
+import { useAppRefresh } from '@/hooks/useAppRefresh';
+import { assets } from '@/lib/assets';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session';
 
@@ -31,7 +34,6 @@ export default function ChatScreen() {
   const t = useTheme();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
-  const insets = useSafeAreaInsets();
   const { delivery_id } = useLocalSearchParams<{ delivery_id?: string }>();
   const profile = useSessionStore((s) => s.profile);
   const userId = useSessionStore((s) => s.user?.id);
@@ -39,6 +41,10 @@ export default function ChatScreen() {
   const sendMutation = useSendChatResponse();
   const listRef = useRef<FlatList>(null);
   const [error, setError] = useState<string | null>(null);
+  const { refreshing, onRefresh } = useAppRefresh([
+    ['chat-thread', userId],
+    ['gauges', userId],
+  ]);
 
   // IDs des bulles déjà animées en typewriter (pour ne pas re-animer)
   const animatedIdsRef = useRef<Set<string>>(new Set());
@@ -155,12 +161,20 @@ export default function ChatScreen() {
   }
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} edges={[]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={headerHeight + tabBarHeight}
       >
+        <Image
+          source={assets.mascot}
+          style={styles.bgMascot}
+          resizeMode="contain"
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
         <FlatList
           ref={listRef}
           data={bubbles}
@@ -168,6 +182,16 @@ export default function ChatScreen() {
           style={{ flex: 1 }}
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={t.primary}
+              colors={[t.primary]}
+            />
+          }
           renderItem={({ item, index }) => {
             // Avatar de la mascotte seulement sur la 1ère bulle AI d'une rafale
             const prev = bubbles[index - 1];
@@ -206,14 +230,14 @@ export default function ChatScreen() {
             placeholder="Réponds à baba IAssou3…"
           />
         ) : (
-          <View style={[styles.idle, { backgroundColor: t.surfaceAlt, borderColor: t.border }]}>
-            <Text style={{ color: t.textMuted, textAlign: 'center', fontSize: font.caption }}>
-              Tu es à jour. baba IAssou3 te recontactera très bientôt.
-            </Text>
+          <View style={styles.idleWrap}>
+            <View style={[styles.idleChip, { backgroundColor: t.surfaceAlt, borderColor: t.border }]}>
+              <Text style={{ color: t.textMuted, textAlign: 'center', fontSize: font.caption }}>
+                Tu es à jour. baba IAssou3 te recontactera très bientôt.
+              </Text>
+            </View>
           </View>
         )}
-
-        <View style={{ height: insets.bottom, backgroundColor: t.surface }} />
       </KeyboardAvoidingView>
     </Screen>
   );
@@ -221,7 +245,22 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  list: { padding: spacing.lg, paddingBottom: spacing.md },
+  list: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md },
+  bgMascot: {
+    position: 'absolute',
+    top: '20%',
+    left: '15%',
+    width: '70%',
+    height: '60%',
+    opacity: 0.18,
+  },
   idle: { padding: spacing.lg, borderTopWidth: 1 },
+  idleWrap: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  idleChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
   error: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
 });

@@ -40,6 +40,7 @@ export async function sendQuestion(payload: SendQuestionPayload): Promise<{
   users_targeted: number;
   devices_pushed: number;
   devices_failed: number;
+  tokens_registered?: number;
 }> {
   const { data, error } = await supabase.functions.invoke('send-question', { body: payload });
   if (error) throw error;

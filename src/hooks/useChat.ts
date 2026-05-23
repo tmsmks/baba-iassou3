@@ -32,9 +32,10 @@ export function useChatThread() {
       const { data: deliveries, error } = await supabase
         .from('question_deliveries')
         .select(
-          'id, question_id, sent_at, questions!inner(texte, lettre), responses(id, contenu, ai_feedback, score, created_at)',
+          'id, question_id, sent_at, questions!inner(texte, lettre, is_onboarding), responses(id, contenu, ai_feedback, score, created_at)',
         )
         .eq('user_id', userId!)
+        .eq('questions.is_onboarding', false)
         .order('sent_at', { ascending: true });
       if (error) throw error;
       return (deliveries ?? []).map((d: any) => {

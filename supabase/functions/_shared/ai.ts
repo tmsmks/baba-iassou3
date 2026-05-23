@@ -1,14 +1,14 @@
-// Appel Gemini 2.0 Flash en mode JSON strict, avec fallback Groq llama-3.3-70b.
+// Appel OpenAI GPT-4.1-mini en mode JSON strict (structured outputs),
+// avec fallback Groq llama-3.3-70b.
 // Les clés viennent des secrets de la fonction Supabase :
-//   supabase secrets set GEMINI_API_KEY=... GROQ_API_KEY=...
+//   supabase secrets set OPENAI_API_KEY=... GROQ_API_KEY=...
 
-const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 export interface AIResponse<T> {
   data: T;
-  provider: 'gemini' | 'groq';
+  provider: 'openai' | 'groq';
 }
 
 export async function callAI<T>(
@@ -16,15 +16,15 @@ export async function callAI<T>(
   userMessage: string,
   responseSchema: Record<string, unknown>,
 ): Promise<AIResponse<T>> {
-  const geminiKey = Deno.env.get('GEMINI_API_KEY');
+  const openaiKey = Deno.env.get('OPENAI_API_KEY');
   const groqKey = Deno.env.get('GROQ_API_KEY');
 
-  if (geminiKey) {
+  if (openaiKey) {
     try {
-      const data = await callGemini<T>(geminiKey, systemPrompt, userMessage, responseSchema);
-      return { data, provider: 'gemini' };
+      const data = await callOpenAI<T>(openaiKey, systemPrompt, userMessage, responseSchema);
+      return { data, provider: 'openai' };
     } catch (err) {
-      console.error('Gemini failed, trying Groq:', err);
+      console.error('OpenAI failed, trying Groq:', err);
       if (!groqKey) throw err;
     }
   }
@@ -33,40 +33,41 @@ export async function callAI<T>(
   return { data, provider: 'groq' };
 }
 
-async function callGemini<T>(
+async function callOpenAI<T>(
   apiKey: string,
   systemPrompt: string,
   userMessage: string,
   responseSchema: Record<string, unknown>,
 ): Promise<T> {
-  const body = {
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-    generationConfig: {
-      temperature: 0.85,
-      topP: 0.95,
-      maxOutputTokens: 700,
-      responseMimeType: 'application/json',
-      responseSchema,
-    },
-    safetySettings: [
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-    ],
-  };
-
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+  const res = await fetch(OPENAI_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4.1-mini',
+      temperature: 0.85,
+      max_tokens: 700,
+      // Structured Outputs : OpenAI garantit que la réponse matche le schema.
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'response',
+          strict: true,
+          schema: addNoAdditionalProps(responseSchema),
+        },
+      },
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+    }),
   });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
-
+  if (!res.ok) throw new Error(`OpenAI ${res.status}: ${await res.text()}`);
   const payload = await res.json();
-  const text: string | undefined = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error(`Gemini empty response: ${JSON.stringify(payload).slice(0, 400)}`);
+  const text: string | undefined = payload?.choices?.[0]?.message?.content;
+  if (!text) throw new Error('OpenAI empty response');
   return JSON.parse(text) as T;
 }
 
@@ -99,8 +100,22 @@ async function callGroq<T>(
   return JSON.parse(text) as T;
 }
 
+/**
+ * OpenAI Structured Outputs exige `additionalProperties: false` sur chaque objet
+ * et `required` listant TOUS les champs. On le rajoute défensivement au schema fourni.
+ */
+function addNoAdditionalProps(schema: Record<string, unknown>): Record<string, unknown> {
+  if (schema?.type !== 'object' || !schema.properties) return schema;
+  const props = schema.properties as Record<string, unknown>;
+  return {
+    ...schema,
+    additionalProperties: false,
+    required: Object.keys(props),
+  };
+}
+
 export function ensureTrailingChoice(message: string): string {
-  const phrase = 'Mais c\'est TON choix.';
+  const phrase = 'Mais ATTENTION ! C\'est ton choix 🫵🏽';
   return message.trimEnd().endsWith(phrase)
     ? message.trim()
     : `${message.trim()} ${phrase}`;

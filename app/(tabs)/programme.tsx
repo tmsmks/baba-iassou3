@@ -4,12 +4,16 @@ import { Screen } from '@/components/Screen';
 import { ProgramRow } from '@/components/ProgramItem';
 import { font, spacing, useTheme } from '@/lib/theme';
 import { useProgram, useToggleFavorite } from '@/hooks/useProgram';
+import { useAppRefresh } from '@/hooks/useAppRefresh';
+import { useSessionStore } from '@/store/session';
 
 export default function ProgrammeScreen() {
   const t = useTheme();
-  const { data, isLoading, refetch, isRefetching } = useProgram();
+  const { data, isLoading } = useProgram();
   const toggleFav = useToggleFavorite();
   const [now, setNow] = useState(() => Date.now());
+  const userId = useSessionStore((s) => s.user?.id);
+  const { refreshing, onRefresh } = useAppRefresh([['program', userId]]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60_000);
@@ -18,7 +22,7 @@ export default function ProgrammeScreen() {
 
   if (isLoading) {
     return (
-      <Screen>
+      <Screen edges={[]}>
         <View style={styles.center}>
           <ActivityIndicator color={t.primary} />
         </View>
@@ -27,11 +31,20 @@ export default function ProgrammeScreen() {
   }
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} edges={[]}>
       <FlatList
         data={data ?? []}
         keyExtractor={(it) => it.id}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={t.primary} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.primary}
+            colors={[t.primary]}
+          />
+        }
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
         ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}
         ListHeaderComponent={

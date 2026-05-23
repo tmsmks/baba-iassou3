@@ -1,6 +1,6 @@
 import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Pressable, StyleSheet } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import { useSessionStore } from '@/store/session';
 import { assets } from '@/lib/assets';
@@ -24,10 +24,13 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: true,
-        headerStyle: { backgroundColor: t.bg, height: 110 },
+        headerStyle: { backgroundColor: t.bg, height: 100 },
         headerTintColor: t.text,
         headerTitleStyle: { fontWeight: '800' },
         headerTitleAlign: 'center',
+        headerLeftContainerStyle: { width: 58 },
+        headerRightContainerStyle: { width: 58 },
+        headerTitleContainerStyle: { alignItems: 'center', justifyContent: 'center' },
         tabBarStyle: {
           backgroundColor: t.bg,
           borderTopColor: t.border,
@@ -41,10 +44,10 @@ export default function TabsLayout() {
                 hitSlop={10}
                 style={{ paddingRight: 16 }}
               >
-                <Ionicons name="construct-outline" size={22} color={t.accent} />
+                <Ionicons name="construct-outline" size={26} color={t.accent} />
               </Pressable>
             )
-          : undefined,
+          : () => <View style={{ width: 26 + 16 }} />,
       }}
     >
       <Tabs.Screen
@@ -55,6 +58,16 @@ export default function TabsLayout() {
           tabBarLabel: 'Chat',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubble-ellipses" size={size} color={color} />
+          ),
+          headerLeft: () => (
+            <Pressable
+              onPress={() => router.push('/tutoriel')}
+              hitSlop={10}
+              style={{ paddingLeft: 16 }}
+              accessibilityLabel="Ouvrir le tutoriel"
+            >
+              <Ionicons name="help-circle-outline" size={26} color={t.text} />
+            </Pressable>
           ),
         }}
       />
@@ -73,10 +86,17 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="calendar" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="chants"
+        options={{
+          title: 'Chants',
+          tabBarIcon: ({ color, size }) => <Ionicons name="musical-notes" size={size} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
-  logo: { width: 280, height: 78 },
+  logo: { width: 280, height: 79 },
 });

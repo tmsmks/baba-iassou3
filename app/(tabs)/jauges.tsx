@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { Gauge } from '@/components/Gauge';
 import { Button } from '@/components/Button';
 import { font, spacing, useTheme } from '@/lib/theme';
 import { useGauges, useConferenceState } from '@/hooks/useGauges';
+import { useAppRefresh } from '@/hooks/useAppRefresh';
 import type { Lettre } from '@/types/database';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session';
@@ -29,6 +30,11 @@ export default function Jauges() {
   const { data: gauges, isLoading } = useGauges();
   const { data: conf } = useConferenceState();
   const prenom = useSessionStore((s) => s.profile?.prenom);
+  const userId = useSessionStore((s) => s.user?.id);
+  const { refreshing, onRefresh } = useAppRefresh([
+    ['gauges', userId],
+    ['conference_state'],
+  ]);
 
   const totals = useMemo(() => {
     if (!gauges) return { answered: 0, total: 0 };
@@ -38,7 +44,7 @@ export default function Jauges() {
 
   if (isLoading) {
     return (
-      <Screen>
+      <Screen edges={[]}>
         <View style={styles.center}>
           <ActivityIndicator color={t.primary} />
         </View>
@@ -55,12 +61,22 @@ export default function Jauges() {
   }));
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} edges={[]}>
       <FlatList
         data={data}
         keyExtractor={(d) => d.lettre}
         ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.primary}
+            colors={[t.primary]}
+          />
+        }
         ListHeaderComponent={
           <View style={{ gap: spacing.sm, marginBottom: spacing.lg }}>
             <Text style={[styles.kicker, { color: t.accent }]}>

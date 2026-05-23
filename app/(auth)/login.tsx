@@ -138,30 +138,34 @@ export default function Login() {
             </Link>
           </View>
 
-          <View style={[styles.sep, { backgroundColor: t.border }]} />
+          {false && (
+            <>
+              <View style={[styles.sep, { backgroundColor: t.border }]} />
 
-          <View style={{ gap: spacing.md }}>
-            <Button
-              label="Continuer avec Google"
-              variant="secondary"
-              onPress={loginGoogle}
-              loading={busy === 'google'}
-              icon={<Ionicons name="logo-google" size={20} color={t.text} />}
-            />
-            {Platform.OS === 'ios' ? (
-              <AppleAuthentication.AppleAuthenticationButton
-                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                buttonStyle={
-                  t.isDark
-                    ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
-                    : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
-                }
-                cornerRadius={16}
-                style={{ height: 52 }}
-                onPress={loginApple}
-              />
-            ) : null}
-          </View>
+              <View style={{ gap: spacing.md }}>
+                <Button
+                  label="Continuer avec Google"
+                  variant="secondary"
+                  onPress={loginGoogle}
+                  loading={busy === 'google'}
+                  icon={<Ionicons name="logo-google" size={20} color={t.text} />}
+                />
+                {Platform.OS === 'ios' ? (
+                  <AppleAuthentication.AppleAuthenticationButton
+                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                    buttonStyle={
+                      t.isDark
+                        ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                        : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                    }
+                    cornerRadius={16}
+                    style={{ height: 52 }}
+                    onPress={loginApple}
+                  />
+                ) : null}
+              </View>
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

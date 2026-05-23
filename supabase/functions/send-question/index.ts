@@ -1,11 +1,11 @@
 // POST /functions/v1/send-question
 // Auth: Bearer <admin JWT>
 // Body: { question_id: string } OR { lettre: 'C'|..., texte: string }
-// Crée 1 delivery par user actif et pousse une notif Expo à tous leurs tokens.
+// Crée 1 delivery par participant (onboarding terminé) et pousse une notif Expo aux tokens enregistrés.
 import { preflight, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { userClient, serviceClient } from '../_shared/supabase.ts';
+import { sendExpoPush, type ExpoPushMessage } from '../_shared/expo-push.ts';
 
-const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const LETTRES = ['C', 'H', 'O', 'I', 'X'] as const;
 type Lettre = typeof LETTRES[number];
 
@@ -42,24 +42,22 @@ Deno.serve(async (req) => {
     }
     const { data: q, error: qErr } = await admin
       .from('questions')
-      .insert({ lettre: body.lettre, texte: body.texte, created_by: u.user.id })
+      .insert({
+        lettre: body.lettre,
+        texte: body.texte,
+        is_onboarding: false,
+        created_by: u.user.id,
+      })
       .select('id')
       .single();
     if (qErr || !q) return errorResponse(500, 'Création question échouée');
     questionId = q.id;
   }
 
-  // Met à jour conference_state.current_question_id
   await admin.from('conference_state').update({
     current_question_id: questionId,
     updated_at: new Date().toISOString(),
   }).eq('id', true);
-
-  // Liste tous les utilisateurs ayant au moins un push token
-  const { data: tokens, error: tokErr } = await admin
-    .from('push_tokens')
-    .select('user_id, expo_token, platform, profiles!inner(prenom)');
-  if (tokErr) return errorResponse(500, 'Lecture tokens échouée');
 
   const { data: question } = await admin
     .from('questions')
@@ -68,8 +66,14 @@ Deno.serve(async (req) => {
     .single();
   if (!question) return errorResponse(404, 'Question introuvable');
 
-  // Crée les deliveries (upsert pour idempotence)
-  const userIds = [...new Set((tokens ?? []).map((t) => t.user_id))];
+  // Tous les participants ayant terminé l'onboarding reçoivent une delivery (chat in-app).
+  const { data: participants, error: partErr } = await admin
+    .from('profiles')
+    .select('id')
+    .not('onboarding_completed_at', 'is', null);
+  if (partErr) return errorResponse(500, 'Lecture participants échouée');
+
+  const userIds = (participants ?? []).map((p) => p.id);
   const deliveryRows = userIds.map((uid) => ({
     user_id: uid,
     question_id: questionId!,
@@ -86,58 +90,41 @@ Deno.serve(async (req) => {
     deliveryByUser = new Map((deliveries ?? []).map((d) => [d.user_id, d.id]));
   }
 
-  // Construit les messages Expo
-  const messages = (tokens ?? []).map((t) => {
-    const prenom = (t as any).profiles?.prenom ?? '';
-    const deliveryId = deliveryByUser.get(t.user_id);
-    return {
-      to: t.expo_token,
-      title: `baba IAssou3 a un mot pour toi${prenom ? ', ' + prenom : ''}`,
-      body: question.texte,
-      sound: 'default',
-      priority: 'high',
-      channelId: 'questions',
-      data: {
-        type: 'question',
-        delivery_id: deliveryId,
-        question_id: question.id,
-        lettre: question.lettre,
-      },
-    };
-  }).filter((m) => m.data.delivery_id);
+  // Push Expo : uniquement les appareils avec token enregistré.
+  const { data: tokens, error: tokErr } = await admin
+    .from('push_tokens')
+    .select('user_id, expo_token, profiles!inner(prenom)');
+  if (tokErr) return errorResponse(500, 'Lecture tokens échouée');
 
-  // Expo accepte jusqu'à 100 messages par requête
-  const chunks: typeof messages[] = [];
-  for (let i = 0; i < messages.length; i += 100) chunks.push(messages.slice(i, i + 100));
-
-  let pushed = 0;
-  let failed = 0;
-  for (const chunk of chunks) {
-    try {
-      const res = await fetch(EXPO_PUSH_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          'Accept-Encoding': 'gzip, deflate',
+  const messages: ExpoPushMessage[] = (tokens ?? [])
+    .map((t) => {
+      const prenom = (t as { profiles?: { prenom?: string } }).profiles?.prenom ?? '';
+      const deliveryId = deliveryByUser.get(t.user_id);
+      if (!deliveryId) return null;
+      return {
+        to: t.expo_token,
+        title: `baba IAssou3 a un mot pour toi${prenom ? ', ' + prenom : ''}`,
+        body: question.texte,
+        sound: 'default' as const,
+        priority: 'high' as const,
+        channelId: 'questions',
+        data: {
+          type: 'question',
+          delivery_id: deliveryId,
+          question_id: question.id,
+          lettre: question.lettre,
         },
-        body: JSON.stringify(chunk),
-      });
-      if (res.ok) pushed += chunk.length;
-      else {
-        failed += chunk.length;
-        console.error('Expo push error', res.status, await res.text());
-      }
-    } catch (e) {
-      failed += chunk.length;
-      console.error('Expo push exception', e);
-    }
-  }
+      };
+    })
+    .filter((m): m is ExpoPushMessage => m !== null);
+
+  const pushResult = await sendExpoPush(messages, admin);
 
   return jsonResponse({
     question_id: questionId,
     users_targeted: userIds.length,
-    devices_pushed: pushed,
-    devices_failed: failed,
+    devices_pushed: pushResult.pushed,
+    devices_failed: pushResult.failed,
+    tokens_registered: (tokens ?? []).length,
   });
 });

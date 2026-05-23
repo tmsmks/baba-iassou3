@@ -70,10 +70,10 @@ npm start          # ouvre Expo Dev Tools, scan le QR code avec Expo Go
 ```bash
 supabase login
 supabase link --project-ref <ton-ref>      # ex: abcdefg
-supabase db push                            # applique migrations/0001 → 0004
+supabase db push                            # applique migrations/0001 → 0019
 ```
 
-Si tu préfères copier-coller : ouvre `supabase/migrations/0001_schema.sql` → exécute dans SQL Editor, puis 0002, 0003, 0004.
+Si tu préfères copier-coller : exécute les fichiers `supabase/migrations/*.sql` dans l'ordre (0001 → 0019), ou `supabase db reset` en local.
 
 ### 3.3 Configurer Google OAuth
 
@@ -95,6 +95,7 @@ Si tu préfères copier-coller : ouvre `supabase/migrations/0001_schema.sql` →
 ```bash
 supabase functions deploy chat-respond
 supabase functions deploy send-question
+supabase functions deploy broadcast-notification
 supabase functions deploy final-verse
 
 # secrets utilisés par les fonctions
@@ -118,9 +119,17 @@ Ouvre l'app → icône clé à molette en haut à droite → écran admin.
 
 ## 4. Notifications push
 
-- Aucune config FCM/APNs nécessaire en dev (Expo gère).
+- **Expo Go ne reçoit pas les push** — il faut un *development build* (`npx expo run:ios` / `run:android`) ou une build EAS.
+- Au premier lancement après onboarding, l'app demande la permission et enregistre le token dans `push_tokens`.
+- L'admin envoie via `send-question` (question + notif) ou `broadcast-notification` (message libre).
+- Déployer aussi `broadcast-notification` :
+
+```bash
+supabase functions deploy broadcast-notification
+```
+
 - En **production**, EAS configure automatiquement les credentials (APNs key + FCM v1 server key) lors du premier `eas build`.
-- L'utilisateur enregistre son Expo token côté `push_tokens` au login (voir `src/lib/notifications.ts`).
+- Vérifier que `EAS_PROJECT_ID` / `extra.eas.projectId` dans `app.config.ts` correspond au projet Expo lié à la build.
 
 ---
 

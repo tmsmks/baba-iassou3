@@ -17,7 +17,7 @@ const responseSchema = {
   properties: {
     message: { type: 'string' },
     score_lettre: { type: 'string', enum: ['C', 'H', 'O', 'I', 'X'] },
-    score_valeur: { type: 'integer', minimum: 0, maximum: 20 },
+    score_valeur: { type: 'integer', minimum: 0, maximum: 5 },
   },
   required: ['message', 'score_lettre', 'score_valeur'],
 };
@@ -58,7 +58,24 @@ Deno.serve(async (req) => {
   const prenom = (delivery as any).profiles.prenom as string;
   const lettre = q.lettre as Lettre;
 
-  const systemPrompt = SYSTEM_PROMPT_CHAT({ prenom, lettre, questionTexte: q.texte });
+  // Récupère les 5 scores d'auto-évaluation (onboarding) pour contextualiser la réponse IA
+  const admin = serviceClient();
+  const { data: onboardingRows } = await admin
+    .from('responses')
+    .select('lettre, score, questions!inner(is_onboarding)')
+    .eq('user_id', userId)
+    .eq('questions.is_onboarding', true);
+  const autoEvaluation: Partial<Record<Lettre, number>> = {};
+  for (const row of (onboardingRows ?? []) as any[]) {
+    if (typeof row.score === 'number') autoEvaluation[row.lettre as Lettre] = row.score;
+  }
+
+  const systemPrompt = SYSTEM_PROMPT_CHAT({
+    prenom,
+    lettre,
+    questionTexte: q.texte,
+    autoEvaluation: Object.keys(autoEvaluation).length > 0 ? autoEvaluation : null,
+  });
 
   let ai: AIChat;
   try {
@@ -70,11 +87,10 @@ Deno.serve(async (req) => {
   }
 
   if (ai.score_lettre !== lettre) ai.score_lettre = lettre;
-  const score = Math.max(0, Math.min(20, Math.round(ai.score_valeur)));
+  const score = Math.max(0, Math.min(5, Math.round(ai.score_valeur)));
   const message = ensureTrailingChoice(ai.message);
 
   // Insertion via service role pour bypass RLS si besoin
-  const admin = serviceClient();
   const { data: inserted, error: insErr } = await admin
     .from('responses')
     .insert({

@@ -13,13 +13,13 @@ interface Props {
   lettre: Lettre;
   nom: string;
   enjeu: string;
-  score: number; // 0..20
+  score: number; // 0..5
   count: number;
 }
 
 export function Gauge({ lettre, nom, enjeu, score, count }: Props) {
   const t = useTheme();
-  const pct = Math.max(0, Math.min(1, score / 20));
+  const pct = Math.max(0, Math.min(1, score / 5));
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export function Gauge({ lettre, nom, enjeu, score, count }: Props) {
         </View>
         <View style={styles.scoreCol}>
           <Text style={[styles.scoreVal, { color: t.text }]}>{score.toFixed(1)}</Text>
-          <Text style={[styles.scoreMax, { color: t.textMuted }]}>/ 20</Text>
+          <Text style={[styles.scoreMax, { color: t.textMuted }]}>/ 5</Text>
         </View>
       </View>
       <View style={[styles.track, { backgroundColor: t.surfaceAlt }]}>

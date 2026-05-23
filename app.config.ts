@@ -5,10 +5,10 @@ import { resolve } from 'node:path';
 const here = (p: string) => resolve(__dirname, p);
 const exists = (p: string) => existsSync(here(p));
 
-/** Projet EAS @thomakss/baba-iassou3 (non secret — requis en dur pour config dynamique). */
+/** Projet EAS @thomaks/baba-iassou3 (non secret — requis en dur pour config dynamique). */
 const EAS_PROJECT_ID =
-  process.env.EAS_PROJECT_ID ?? '13774dbb-5248-4fb7-8451-13dcb08c09d9';
-const EXPO_OWNER = process.env.EXPO_OWNER ?? 'thomakss';
+  process.env.EAS_PROJECT_ID ?? '9a422c86-ab2b-4fe8-b8e3-811733699b2a';
+const EXPO_OWNER = process.env.EXPO_OWNER ?? 'thomaks';
 
 // Fallback : si pas d'icon.png dédié, on utilise la mascotte.
 const iconPath = exists('./assets/icon.png')
@@ -50,7 +50,7 @@ const config: ExpoConfig = {
   assetBundlePatterns: ['**/*'],
   ios: {
     supportsTablet: false,
-    bundleIdentifier: 'church.suismoi.babaiassou3',
+    bundleIdentifier: 'suismoi.babaiassou3',
     usesAppleSignIn: true,
     infoPlist: {
       UIBackgroundModes: ['remote-notification'],
@@ -59,7 +59,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: 'church.suismoi.babaiassou3',
+    package: 'suismoi.babaiassou3',
     ...(adaptiveIconPath
       ? {
           adaptiveIcon: {
