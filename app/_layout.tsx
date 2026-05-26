@@ -7,7 +7,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
 import { useColorScheme } from 'react-native';
 import { useSessionBootstrap } from '@/hooks/useSession';
-import { useSessionStore } from '@/store/session';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { isQuestionPayload } from '@/lib/notifications';
 import { usePushRegistration } from '@/hooks/usePushRegistration';
@@ -23,22 +22,8 @@ function Bootstrap() {
   useSessionBootstrap();
   useRealtimeSync();
   usePushRegistration();
-  const user = useSessionStore((s) => s.user);
-  const loading = useSessionStore((s) => s.loading);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
   const receivedListener = useRef<Notifications.EventSubscription | null>(null);
-
-  const profile = useSessionStore((s) => s.profile);
-  useEffect(() => {
-    if (loading) return;
-    if (!user) {
-      router.replace('/(auth)/login');
-    } else if (profile && !profile.onboarding_completed_at) {
-      router.replace('/onboarding');
-    } else if (profile) {
-      router.replace('/(tabs)/chat');
-    }
-  }, [user, loading, profile]);
 
   useEffect(() => {
     responseListener.current = Notifications.addNotificationResponseReceivedListener((resp) => {

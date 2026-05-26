@@ -24,6 +24,11 @@ export function useSessionBootstrap(): void {
 
   useEffect(() => {
     let active = true;
+    // Garde-fou : si Supabase met trop de temps à répondre (réseau lent au cold start
+    // TestFlight, AsyncStorage bloqué…), on débloque l'UI plutôt que rester sur le spinner.
+    const failsafe = setTimeout(() => {
+      if (active) setLoading(false);
+    }, 8000);
     (async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
@@ -84,6 +89,7 @@ export function useSessionBootstrap(): void {
 
     return () => {
       active = false;
+      clearTimeout(failsafe);
       sub.subscription.unsubscribe();
     };
   }, [setSession, setProfile, setLoading]);

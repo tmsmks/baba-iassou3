@@ -30,8 +30,11 @@ const googleServicesPath =
       ? './google-services.json'
       : undefined;
 
+/** Nom sous l'icône sur l'écran d'accueil (iOS + Android). */
+const APP_DISPLAY_NAME = 'baba IAssou3';
+
 const config: ExpoConfig = {
-  name: 'baba IAssou3',
+  name: APP_DISPLAY_NAME,
   slug: 'baba-iassou3',
   scheme: 'babaiassou3',
   version: '1.0.0',
@@ -53,6 +56,7 @@ const config: ExpoConfig = {
     bundleIdentifier: 'suismoi.babaiassou3',
     usesAppleSignIn: true,
     infoPlist: {
+      CFBundleDisplayName: APP_DISPLAY_NAME,
       UIBackgroundModes: ['remote-notification'],
       NSUserTrackingUsageDescription:
         "Aucun tracking publicitaire. Cette permission n'est utilisée que pour les notifications de la conférence.",
@@ -82,6 +86,7 @@ const config: ExpoConfig = {
       }
     : {}),
   plugins: [
+    './plugins/withAppDisplayName.js',
     './plugins/withFmtXcode26Fix.js',
     'expo-dev-client',
     'expo-router',
