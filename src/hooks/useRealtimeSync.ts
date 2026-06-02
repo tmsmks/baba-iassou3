@@ -73,7 +73,54 @@ export function useRealtimeSync() {
       )
       .subscribe();
 
-    // Quand l'app revient au premier plan, refetch le profil au cas où Realtime
+    // Canal global : actions admin → propagation instantanée à tous les clients.
+    const globalChannel = supabase
+      .channel('global-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sermons' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['sermons'] });
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'conference_state' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['conference_state'] });
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'program' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['program'] });
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'chants' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['chants'] });
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'photos' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['photos'] });
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'photo_likes' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['photos'] });
+        },
+      )
+      .subscribe();
+
+    // Quand l'app revient au premier plan, refetch tout au cas où Realtime
     // aurait raté un event pendant que l'app était en background.
     const appStateSub = AppState.addEventListener('change', async (state) => {
       if (state !== 'active' || !userId) return;
@@ -90,10 +137,16 @@ export function useRealtimeSync() {
       }
       qc.invalidateQueries({ queryKey: ['chat-thread', userId] });
       qc.invalidateQueries({ queryKey: ['gauges', userId] });
+      qc.invalidateQueries({ queryKey: ['sermons'] });
+      qc.invalidateQueries({ queryKey: ['conference_state'] });
+      qc.invalidateQueries({ queryKey: ['program'] });
+      qc.invalidateQueries({ queryKey: ['chants'] });
+      qc.invalidateQueries({ queryKey: ['photos'] });
     });
 
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(globalChannel);
       appStateSub.remove();
     };
   }, [userId, qc, setProfile]);

@@ -21,17 +21,27 @@ const STEPS: Step[] = [
   {
     icon: 'stats-chart-outline',
     title: 'Suis tes 5 jauges',
-    body: "Chaque question est rattachée à une lettre du mot CHOIX. Plus tu réponds, plus tes jauges se précisent. L'onglet « Jauges » te montre où tu en es.",
+    body: "Chaque question est rattachée à une lettre du mot CHOIX. Plus tu réponds, plus tes jauges se précisent. Les jauges se débloquent après le premier workshop.",
   },
   {
     icon: 'calendar-outline',
     title: 'Consulte le programme',
-    body: "L'onglet « Programme » regroupe les sessions de la conférence Suis-moi. Toutes les infos pratiques sont à portée de main.",
+    body: "L'onglet « Programme » regroupe les sessions jour par jour. Navigue entre les 3 jours de la conférence avec les sous-onglets.",
   },
   {
-    icon: 'sparkles-outline',
-    title: 'Reçois ton verset final',
-    body: "À la fin de la conférence, baba IAssou3 te propose un verset choisi pour ta lettre la plus faible, avec un conseil concret pour l'appliquer.",
+    icon: 'help-circle-outline',
+    title: 'Pose tes questions aux évêques',
+    body: "Quand une FAQ s'ouvre, pose tes questions de façon anonyme. Like les questions des autres pour les faire remonter !",
+  },
+  {
+    icon: 'people-outline',
+    title: 'Amis secrets',
+    body: "Tu reçois un ami secret à encourager pendant la conférence. Envoie-lui des messages anonymes via la boîte aux lettres. La grande révélation a lieu à la fin !",
+  },
+  {
+    icon: 'camera-outline',
+    title: 'Mur de photos',
+    body: "Partage tes plus beaux moments de la conférence sur le mur de photos. Like les photos des autres !",
   },
 ];
 

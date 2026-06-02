@@ -57,6 +57,7 @@ const config: ExpoConfig = {
     usesAppleSignIn: true,
     infoPlist: {
       CFBundleDisplayName: APP_DISPLAY_NAME,
+      CFBundleName: APP_DISPLAY_NAME,
       UIBackgroundModes: ['remote-notification'],
       NSUserTrackingUsageDescription:
         "Aucun tracking publicitaire. Cette permission n'est utilisée que pour les notifications de la conférence.",
@@ -88,6 +89,7 @@ const config: ExpoConfig = {
   plugins: [
     './plugins/withAppDisplayName.js',
     './plugins/withFmtXcode26Fix.js',
+    '@sentry/react-native',
     'expo-dev-client',
     'expo-router',
     'expo-secure-store',
@@ -106,6 +108,7 @@ const config: ExpoConfig = {
   extra: {
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+    sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
     eas: { projectId: EAS_PROJECT_ID },
   },
   owner: EXPO_OWNER,

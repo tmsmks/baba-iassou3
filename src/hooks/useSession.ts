@@ -28,7 +28,7 @@ export function useSessionBootstrap(): void {
     // TestFlight, AsyncStorage bloqué…), on débloque l'UI plutôt que rester sur le spinner.
     const failsafe = setTimeout(() => {
       if (active) setLoading(false);
-    }, 8000);
+    }, 7000);
     (async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
@@ -44,11 +44,21 @@ export function useSessionBootstrap(): void {
         if (!active) return;
         setSession(data.session);
         if (data.session?.user) {
-          const { data: prof } = await supabase
+          // Timeout sur la requête profile : si le réseau hange au cold start,
+          // on débloque quand même l'UI (le failsafe global est à 7 s, on prend
+          // une marge en dessous). 5 s laisse le temps à un réseau lent de
+          // répondre avant de basculer sur la boucle de retry de app/index.tsx.
+          const profilePromise = supabase
             .from('profiles')
             .select('*')
             .eq('id', data.session.user.id)
             .maybeSingle();
+          const timeout = new Promise<{ data: null }>((resolve) =>
+            setTimeout(() => resolve({ data: null }), 5000),
+          );
+          const { data: prof } = (await Promise.race([profilePromise, timeout])) as {
+            data: any;
+          };
           if (active) setProfile(prof ?? null);
         }
         if (active) setLoading(false);
@@ -74,14 +84,23 @@ export function useSessionBootstrap(): void {
         setProfile(null);
         return;
       }
+      const prevUserId = useSessionStore.getState().user?.id;
       setSession(session);
       if (session?.user) {
-        const { data: prof } = await supabase
+        const { data: prof, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .maybeSingle();
-        setProfile(prof ?? null);
+        // Si on change vraiment d'utilisateur, on met à jour systématiquement.
+        // Sinon (même user, échec réseau transitoire) on ne clobber pas le profile
+        // existant avec null — ça forcerait à tort un redirect vers /onboarding.
+        const userChanged = prevUserId !== session.user.id;
+        if (prof) {
+          setProfile(prof as any);
+        } else if (userChanged && !error) {
+          setProfile(null);
+        }
       } else {
         setProfile(null);
       }

@@ -114,11 +114,21 @@ export type NotifPayload = {
   lettre: 'C' | 'H' | 'O' | 'I' | 'X';
 };
 
+export type SecretFriendPayload = { type: 'secret_friend' };
+
 export function isQuestionPayload(data: unknown): data is NotifPayload {
   return (
     typeof data === 'object' &&
     data !== null &&
     (data as NotifPayload).type === 'question' &&
     typeof (data as NotifPayload).delivery_id === 'string'
+  );
+}
+
+export function isSecretFriendPayload(data: unknown): data is SecretFriendPayload {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    (data as { type?: string }).type === 'secret_friend'
   );
 }

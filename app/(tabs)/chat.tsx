@@ -41,10 +41,7 @@ export default function ChatScreen() {
   const sendMutation = useSendChatResponse();
   const listRef = useRef<FlatList>(null);
   const [error, setError] = useState<string | null>(null);
-  const { refreshing, onRefresh } = useAppRefresh([
-    ['chat-thread', userId],
-    ['gauges', userId],
-  ]);
+  const { refreshing, onRefresh } = useAppRefresh();
 
   // IDs des bulles déjà animées en typewriter (pour ne pas re-animer)
   const animatedIdsRef = useRef<Set<string>>(new Set());

@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { Gauge } from '@/components/Gauge';
 import { Button } from '@/components/Button';
-import { font, spacing, useTheme } from '@/lib/theme';
+import { font, radius, spacing, useTheme } from '@/lib/theme';
 import { useGauges, useConferenceState } from '@/hooks/useGauges';
 import { useAppRefresh } from '@/hooks/useAppRefresh';
+import { assets } from '@/lib/assets';
 import type { Lettre } from '@/types/database';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session';
@@ -22,7 +24,15 @@ const META: Record<Lettre, { nom: string; enjeu: string }> = {
 const ORDER: Lettre[] = ['C', 'H', 'O', 'I', 'X'];
 
 async function signOut() {
-  await supabase.auth.signOut();
+  try {
+    await supabase.auth.signOut();
+  } catch (e) {
+    console.warn('signOut error', e);
+  } finally {
+    // Navigation explicite : sans ça, l'écran courant ne se ré-évalue pas
+    // (l'index `/` n'est plus monté, donc le Redirect n'a pas lieu).
+    router.replace('/(auth)/login');
+  }
 }
 
 export default function Jauges() {
@@ -31,10 +41,7 @@ export default function Jauges() {
   const { data: conf } = useConferenceState();
   const prenom = useSessionStore((s) => s.profile?.prenom);
   const userId = useSessionStore((s) => s.user?.id);
-  const { refreshing, onRefresh } = useAppRefresh([
-    ['gauges', userId],
-    ['conference_state'],
-  ]);
+  const { refreshing, onRefresh } = useAppRefresh();
 
   const totals = useMemo(() => {
     if (!gauges) return { answered: 0, total: 0 };
@@ -48,6 +55,50 @@ export default function Jauges() {
         <View style={styles.center}>
           <ActivityIndicator color={t.primary} />
         </View>
+      </Screen>
+    );
+  }
+
+  if (!conf?.gauges_unlocked) {
+    return (
+      <Screen padded={false} edges={[]}>
+        <ScrollView
+          contentContainerStyle={styles.lockedScroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={t.primary}
+              colors={[t.primary]}
+            />
+          }
+        >
+          <Image source={assets.mascot} style={styles.lockedMascot} resizeMode="contain" />
+          <Text style={[styles.kicker, { color: t.accent }]}>Bientôt</Text>
+          <Text style={[styles.title, { color: t.text, textAlign: 'center' }]}>
+            Les 5 jauges arrivent…
+          </Text>
+          <View style={[styles.lockedCard, { backgroundColor: t.surface, borderColor: t.border }]}>
+            <View style={styles.lockedRow}>
+              <Ionicons name="lock-closed" size={22} color={t.accent} />
+              <Text style={[styles.lockedTitle, { color: t.text }]}>Workshop 1 — Ruth</Text>
+            </View>
+            <Text style={[styles.lockedBody, { color: t.textMuted }]}>
+              Avant de découvrir tes 5 indicateurs (C-H-O-I-X), on analyse ensemble{' '}
+              <Text style={{ color: t.text, fontWeight: '700' }}>l'histoire de Ruth</Text> et sa méthode
+              de choix. On essaiera de l'appliquer durant toute la conférence.
+            </Text>
+            <Text style={[styles.lockedBody, { color: t.textMuted }]}>
+              Après le workshop, l'animateur débloquera tes jauges et on te proposera un{' '}
+              <Text style={{ color: t.text, fontWeight: '700' }}>premier choix</Text> à faire.
+            </Text>
+          </View>
+          <Pressable onPress={signOut} hitSlop={10}>
+            <Text style={{ color: t.textMuted, textAlign: 'center', fontSize: font.caption, paddingVertical: spacing.lg }}>
+              Se déconnecter
+            </Text>
+          </Pressable>
+        </ScrollView>
       </Screen>
     );
   }
@@ -123,8 +174,14 @@ export default function Jauges() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  kicker: { fontSize: font.caption, fontWeight: '800', letterSpacing: 2, textTransform: 'uppercase' },
+  kicker: { fontSize: font.caption, fontWeight: '800', letterSpacing: 2, textTransform: 'uppercase', textAlign: 'center' },
   title: { fontSize: font.title, fontWeight: '800' },
   sub: { fontSize: font.body },
   notFinished: { padding: spacing.md, borderRadius: 12, borderWidth: 1 },
+  lockedScroll: { padding: spacing.lg, gap: spacing.md, alignItems: 'stretch', paddingBottom: spacing.xxl },
+  lockedMascot: { width: 160, height: 160, alignSelf: 'center', opacity: 0.6 },
+  lockedCard: { padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, gap: spacing.sm, marginTop: spacing.md },
+  lockedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  lockedTitle: { fontSize: font.subtitle, fontWeight: '800' },
+  lockedBody: { fontSize: font.body, lineHeight: 22 },
 });

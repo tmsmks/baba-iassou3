@@ -8,24 +8,36 @@ import { Button } from '@/components/Button';
 import { font, spacing, useTheme } from '@/lib/theme';
 import { assets } from '@/lib/assets';
 import { supabase } from '@/lib/supabase';
+import { ageFromDate, maskDateFR, parseDateFR } from '@/lib/display';
 
 const schema = z.object({
-  prenom: z.string().min(1, 'Ton prénom est requis').max(60),
-  email: z.string().email('Email invalide'),
+  prenom: z.string().trim().min(1, 'Ton prénom est requis').max(60),
+  nom: z.string().trim().min(1, 'Ton nom est requis').max(80),
+  dateNaissance: z
+    .string()
+    .trim()
+    .min(1, 'Ta date de naissance est requise')
+    .refine((v) => parseDateFR(v) !== null, 'Date invalide (JJ/MM/AAAA)')
+    .transform((v) => parseDateFR(v)!),
+  email: z.string().trim().email('Email invalide'),
   password: z.string().min(6, '6 caractères minimum'),
 });
 
 export default function Register() {
   const t = useTheme();
   const [prenom, setPrenom] = useState('');
+  const [nom, setNom] = useState('');
+  const [dateNaissance, setDateNaissance] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const computedAge = ageFromDate(parseDateFR(dateNaissance));
+
   const submit = async () => {
     setError(null);
-    const parsed = schema.safeParse({ prenom, email, password });
+    const parsed = schema.safeParse({ prenom, nom, dateNaissance, email, password });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Données invalides');
       return;
@@ -34,7 +46,13 @@ export default function Register() {
     const { data, error } = await supabase.auth.signUp({
       email: parsed.data.email,
       password: parsed.data.password,
-      options: { data: { prenom: parsed.data.prenom } },
+      options: {
+        data: {
+          prenom: parsed.data.prenom,
+          nom: parsed.data.nom,
+          date_naissance: parsed.data.dateNaissance,
+        },
+      } as any,
     });
     setBusy(false);
     if (error) {
@@ -56,7 +74,7 @@ export default function Register() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>
             <View style={styles.heroText}>
-              <Text style={[styles.title, { color: t.text }]}>Bienvenue,{'\n'}quel est ton prénom ?</Text>
+              <Text style={[styles.title, { color: t.text }]}>Bienvenue !{'\n'}Faisons connaissance.</Text>
               <Text style={[styles.sub, { color: t.textMuted }]}>
                 baba IAssou3 l'utilisera pour s'adresser personnellement à toi.
               </Text>
@@ -71,6 +89,28 @@ export default function Register() {
               autoCapitalize="words"
               autoComplete="name-given"
             />
+            <TextField
+              label="Nom"
+              value={nom}
+              onChangeText={setNom}
+              autoCapitalize="words"
+              autoComplete="name-family"
+            />
+            <TextField
+              label="Date de naissance"
+              value={dateNaissance}
+              onChangeText={(v) => setDateNaissance(maskDateFR(v))}
+              keyboardType="number-pad"
+              inputMode="numeric"
+              maxLength={10}
+              placeholder="JJ/MM/AAAA"
+              returnKeyType="done"
+            />
+            {computedAge != null ? (
+              <Text style={{ color: t.textMuted, fontSize: font.caption, marginTop: -spacing.xs }}>
+                {computedAge} an{computedAge > 1 ? 's' : ''}
+              </Text>
+            ) : null}
             <TextField
               label="Email"
               value={email}

@@ -1,7 +1,7 @@
 /** Force le nom affiché sous l'icône : « baba IAssou3 » (avec espace). */
 const { withInfoPlist, withStringsXml, AndroidConfig } = require('@expo/config-plugins');
 
-const DISPLAY_NAME = 'baba IAssou3';
+const DISPLAY_NAME = 'baba  IAssou3';
 
 function withAppDisplayName(config) {
   config = withInfoPlist(config, (cfg) => {

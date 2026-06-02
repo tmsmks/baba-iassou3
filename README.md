@@ -148,8 +148,6 @@ eas init               # crée le projet Expo, génère EAS_PROJECT_ID → mets-
 # 1. profile production iOS
 eas credentials               # une fois, choisir "Build credentials > Set up new"
 eas build --platform ios --profile production
-
-# 2. soumettre à App Store Connect
 eas submit --platform ios
 ```
 

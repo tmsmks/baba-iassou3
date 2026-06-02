@@ -23,15 +23,19 @@ import { font, lettreColors, radius, spacing, useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session';
 import { sendQuestion } from '@/lib/ai';
-import type { Chant, ConferenceState, Lettre, ProgramItem, Question } from '@/types/database';
+import type { Chant, ConferenceState, FaqQuestion, Lettre, ProgramItem, Question, Sermon } from '@/types/database';
+import { ageFromDate, displayName, formatDateFR } from '@/lib/display';
 
 const LETTRES: Lettre[] = ['C', 'H', 'O', 'I', 'X'];
 
-type AdminTab = 'envoi' | 'conference' | 'chants' | 'users';
+type AdminTab = 'stats' | 'envoi' | 'conference' | 'sermons' | 'chants' | 'users' | 'messages';
 
 const TABS: { id: AdminTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'stats', label: 'Stats', icon: 'stats-chart-outline' },
   { id: 'envoi', label: 'Envoi', icon: 'send-outline' },
   { id: 'conference', label: 'Conférence', icon: 'calendar-outline' },
+  { id: 'sermons', label: 'Sermons', icon: 'help-buoy-outline' },
+  { id: 'messages', label: 'Messages', icon: 'mail-outline' },
   { id: 'chants', label: 'Chants', icon: 'musical-notes-outline' },
   { id: 'users', label: 'Utilisateurs', icon: 'people-outline' },
 ];
@@ -39,9 +43,16 @@ const TABS: { id: AdminTab; label: string; icon: keyof typeof Ionicons.glyphMap 
 export default function Admin() {
   const t = useTheme();
   const isAdmin = useSessionStore((s) => s.profile?.is_admin);
-  const [activeTab, setActiveTab] = useState<AdminTab>('envoi');
+  const isModerator = useSessionStore((s) => s.profile?.is_moderator);
+  const allowed = !!(isAdmin || isModerator);
+  // Modérateurs : accès uniquement à l'onglet Sermons (FAQ)
+  const visibleTabs = useMemo(
+    () => (isAdmin ? TABS : TABS.filter((tab) => tab.id === 'sermons')),
+    [isAdmin],
+  );
+  const [activeTab, setActiveTab] = useState<AdminTab>(isAdmin ? 'stats' : 'sermons');
 
-  if (isAdmin === false) {
+  if (!allowed) {
     return (
       <Screen>
         <View style={styles.center}>
@@ -58,7 +69,9 @@ export default function Admin() {
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <Ionicons name="close" size={26} color={t.text} />
         </Pressable>
-        <Text style={[styles.title, { color: t.text }]}>Admin conférence</Text>
+        <Text style={[styles.title, { color: t.text }]}>
+          {isAdmin ? 'Admin conférence' : 'Modération FAQ'}
+        </Text>
         <View style={{ width: 26 }} />
       </View>
 
@@ -68,7 +81,7 @@ export default function Admin() {
         style={styles.tabBarScroll}
         contentContainerStyle={styles.tabBar}
       >
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const active = activeTab === tab.id;
           return (
             <Pressable
@@ -108,6 +121,7 @@ export default function Admin() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator
       >
+        {activeTab === 'stats' && <StatsCard />}
         {activeTab === 'envoi' && (
           <>
             <SendQuestionCard />
@@ -117,13 +131,198 @@ export default function Admin() {
         {activeTab === 'conference' && (
           <>
             <ConferenceStateCard />
+            <SecretFriendsPairingsCard />
             <ProgramEditorCard />
           </>
         )}
+        {activeTab === 'sermons' && <SermonsManagerCard />}
+        {activeTab === 'messages' && <SecretMessagesModCard />}
         {activeTab === 'chants' && <ChantsManagerCard />}
-        {activeTab === 'users' && <ResetConversationsCard />}
+        {activeTab === 'users' && (
+          <>
+            <ResetConversationsCard />
+            <DeleteUsersCard />
+          </>
+        )}
       </ScrollView>
     </Screen>
+  );
+}
+
+interface StatsPayload {
+  total_participants: number;
+  onboarded_participants: number;
+  pending_invites: number;
+  responses_today: number;
+  responses_total: number;
+  chat_questions_sent: number;
+  gauges: { c: number; h: number; o: number; i: number; x: number };
+  sermons: {
+    id: string;
+    intervenant: string;
+    theme: string;
+    debut_at: string;
+    manual_open: boolean;
+    questions_count: number;
+    answered_count: number;
+    total_likes: number;
+  }[];
+  photos_count: number;
+  secret_messages_count: number;
+  secret_friends_assigned: number;
+  updated_at: string;
+}
+
+function StatsCard() {
+  const t = useTheme();
+  const [stats, setStats] = useState<StatsPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await (supabase.rpc as any)('admin_stats');
+    setLoading(false);
+    if (error) {
+      Alert.alert('Erreur', error.message);
+      return;
+    }
+    setStats(data as StatsPayload);
+  };
+
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (loading && !stats) {
+    return (
+      <View style={[card(t)]}>
+        <ActivityIndicator color={t.primary} />
+      </View>
+    );
+  }
+  if (!stats) return null;
+
+  const onboardedPct = stats.total_participants
+    ? Math.round((stats.onboarded_participants / stats.total_participants) * 100)
+    : 0;
+
+  const lettres: { l: 'c' | 'h' | 'o' | 'i' | 'x'; nom: string; color: string }[] = [
+    { l: 'c', nom: 'Clarté', color: lettreColors.C },
+    { l: 'h', nom: 'Honnêteté', color: lettreColors.H },
+    { l: 'o', nom: 'Orientation', color: lettreColors.O },
+    { l: 'i', nom: 'Impartialité', color: lettreColors.I },
+    { l: 'x', nom: 'X factor', color: lettreColors.X },
+  ];
+
+  return (
+    <View style={{ gap: spacing.md }}>
+      <View style={[card(t)]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={[h2(t)]}>Vue d'ensemble</Text>
+          <Pressable onPress={load} hitSlop={8}>
+            <Ionicons name="refresh" size={20} color={t.textMuted} />
+          </Pressable>
+        </View>
+        <View style={styles.statGrid}>
+          <StatBox value={stats.total_participants} label="Participants" t={t} />
+          <StatBox value={stats.onboarded_participants} label={`Onboardés (${onboardedPct}%)`} t={t} color={t.success} />
+          <StatBox value={stats.responses_today} label="Réponses aujourd'hui" t={t} color={t.accent} />
+          <StatBox value={stats.responses_total} label="Réponses total" t={t} />
+          <StatBox value={stats.chat_questions_sent} label="Q. chat envoyées" t={t} />
+          <StatBox value={stats.photos_count} label="Photos partagées" t={t} />
+          <StatBox value={stats.secret_messages_count} label="Msg amis secrets" t={t} />
+          <StatBox value={stats.secret_friends_assigned} label="Amis secrets" t={t} />
+        </View>
+        <Text style={{ color: t.textMuted, fontSize: font.micro, textAlign: 'right' }}>
+          Maj : {new Date(stats.updated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+        </Text>
+      </View>
+
+      <View style={[card(t)]}>
+        <Text style={[h2(t)]}>Distribution moyenne des jauges</Text>
+        <View style={{ gap: spacing.sm }}>
+          {lettres.map((row) => {
+            const val = stats.gauges[row.l] ?? 0;
+            const pct = Math.max(0, Math.min(1, val / 5));
+            return (
+              <View key={row.l} style={{ gap: 4 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ color: t.text, fontWeight: '700' }}>
+                    {row.l.toUpperCase()} · {row.nom}
+                  </Text>
+                  <Text style={{ color: t.textMuted, fontSize: font.caption }}>{val.toFixed(2)} / 5</Text>
+                </View>
+                <View style={{ height: 8, backgroundColor: t.surfaceAlt, borderRadius: 999, overflow: 'hidden' }}>
+                  <View style={{ width: `${pct * 100}%`, height: '100%', backgroundColor: row.color }} />
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={[card(t)]}>
+        <Text style={[h2(t)]}>FAQ par sermon</Text>
+        {stats.sermons.length === 0 ? (
+          <Text style={{ color: t.textMuted, fontSize: font.caption }}>Aucun sermon programmé.</Text>
+        ) : (
+          stats.sermons.map((s) => {
+            const answeredPct = s.questions_count
+              ? Math.round((s.answered_count / s.questions_count) * 100)
+              : 0;
+            return (
+              <View key={s.id} style={[styles.qRow, { backgroundColor: t.surfaceAlt, borderColor: t.border, gap: 4 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <Text style={{ color: t.text, fontWeight: '800', flex: 1 }} numberOfLines={1}>
+                    {s.intervenant}
+                  </Text>
+                  {s.manual_open ? (
+                    <View style={[styles.badgeStat, { backgroundColor: t.success }]}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>OUVERT</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={{ color: t.textMuted, fontSize: font.caption }}>{s.theme}</Text>
+                <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: 4, flexWrap: 'wrap' }}>
+                  <Text style={{ color: t.text, fontSize: font.caption }}>
+                    💬 <Text style={{ fontWeight: '800' }}>{s.questions_count}</Text> question
+                    {s.questions_count > 1 ? 's' : ''}
+                  </Text>
+                  <Text style={{ color: t.text, fontSize: font.caption }}>
+                    ✅ <Text style={{ fontWeight: '800' }}>{s.answered_count}</Text> répondue
+                    {s.answered_count > 1 ? 's' : ''} ({answeredPct}%)
+                  </Text>
+                  <Text style={{ color: t.text, fontSize: font.caption }}>
+                    ❤️ <Text style={{ fontWeight: '800' }}>{s.total_likes}</Text> likes
+                  </Text>
+                </View>
+              </View>
+            );
+          })
+        )}
+      </View>
+    </View>
+  );
+}
+
+function StatBox({
+  value,
+  label,
+  t,
+  color,
+}: {
+  value: number;
+  label: string;
+  t: ReturnType<typeof useTheme>;
+  color?: string;
+}) {
+  return (
+    <View style={[styles.statBox, { backgroundColor: t.surfaceAlt, borderColor: t.border }]}>
+      <Text style={{ color: color ?? t.text, fontSize: 28, fontWeight: '900' }}>{value}</Text>
+      <Text style={{ color: t.textMuted, fontSize: font.caption, textAlign: 'center' }}>{label}</Text>
+    </View>
   );
 }
 
@@ -255,7 +454,8 @@ function SendQuestionCard() {
 function ConferenceStateCard() {
   const t = useTheme();
   const [state, setState] = useState<ConferenceState | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<null | 'finished' | 'gauges' | 'secret'>(null);
+  const [secretCount, setSecretCount] = useState<number | null>(null);
 
   useEffect(() => {
     supabase
@@ -266,23 +466,99 @@ function ConferenceStateCard() {
       .then(({ data }) => setState(data as ConferenceState | null));
   }, []);
 
-  const toggle = async (val: boolean) => {
+  const update = async (
+    key: keyof Pick<ConferenceState, 'is_finished' | 'gauges_unlocked' | 'secret_friends_revealed'>,
+    val: boolean,
+    busy: 'finished' | 'gauges' | 'secret',
+  ) => {
     if (!state) return;
-    setSaving(true);
+    setSaving(busy);
     const { error } = await supabase
       .from('conference_state')
-      .update({ is_finished: val, updated_at: new Date().toISOString() })
+      .update({ [key]: val, updated_at: new Date().toISOString() })
       .eq('id', true);
-    setSaving(false);
+    setSaving(null);
     if (error) Alert.alert('Erreur', error.message);
-    else setState({ ...state, is_finished: val });
+    else setState({ ...state, [key]: val });
+  };
+
+  const launchSecretFriends = () => {
+    if (!state) return;
+    Alert.alert(
+      'Lancer les amis secrets ?',
+      "Tous les participants (admins inclus) seront tirés au sort (cycle unique → personne ne tombe sur soi-même). Chaque participant recevra une notification avec le prénom de son ami secret. Tu peux relancer plus tard, ça écrase le tirage précédent.",
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Lancer',
+          style: 'default',
+          onPress: async () => {
+            setSaving('secret');
+            try {
+              const { data: count, error } = await (supabase.rpc as any)(
+                'admin_assign_secret_friends',
+              );
+              if (error) throw error;
+              setSecretCount(typeof count === 'number' ? count : null);
+              // Persister le flag en base pour que tous les clients le voient
+              await supabase
+                .from('conference_state')
+                .update({ secret_friends_revealed: true })
+                .eq('id', state.id);
+              setState({ ...state, secret_friends_revealed: true });
+              // Notification push à tous
+              const { error: notifErr } = await supabase.functions.invoke('broadcast-notification', {
+                body: {
+                  title: 'Ton ami secret est arrivé !',
+                  body: 'Découvre qui tu dois gâter durant la conférence (en secret 🤫).',
+                  data: { type: 'secret_friend' },
+                },
+              });
+              if (notifErr) {
+                Alert.alert(
+                  'Tirage OK',
+                  `${count ?? '?'} participant(s) appariés. Notification non envoyée : ${notifErr.message}`,
+                );
+              } else {
+                Alert.alert(
+                  'Amis secrets lancés',
+                  `${count ?? '?'} participant(s) appariés. Notification envoyée à tous.`,
+                );
+              }
+            } catch (e: any) {
+              Alert.alert('Erreur', e?.message ?? 'Échec du tirage');
+            } finally {
+              setSaving(null);
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (!state) return null;
 
   return (
     <View style={[card(t)]}>
-      <Text style={[h2(t)]}>Fin de la conférence</Text>
+      <Text style={[h2(t)]}>État de la conférence</Text>
+
+      <View style={styles.toggleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: t.text, fontSize: font.body, fontWeight: '600' }}>
+            Débloquer les jauges
+          </Text>
+          <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+            À activer après le Workshop 1 (Ruth). Les participants découvrent leurs 5 indicateurs.
+          </Text>
+        </View>
+        <Switch
+          value={state.gauges_unlocked}
+          onValueChange={(v) => update('gauges_unlocked', v, 'gauges')}
+          disabled={saving !== null}
+          thumbColor={state.gauges_unlocked ? t.accent : undefined}
+        />
+      </View>
+
       <View style={styles.toggleRow}>
         <View style={{ flex: 1 }}>
           <Text style={{ color: t.text, fontSize: font.body, fontWeight: '600' }}>
@@ -294,31 +570,466 @@ function ConferenceStateCard() {
         </View>
         <Switch
           value={state.is_finished}
-          onValueChange={toggle}
-          disabled={saving}
+          onValueChange={(v) => update('is_finished', v, 'finished')}
+          disabled={saving !== null}
           thumbColor={state.is_finished ? t.accent : undefined}
         />
       </View>
+
+      <View style={[styles.toggleRow, { alignItems: 'flex-start' }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: t.text, fontSize: font.body, fontWeight: '600' }}>
+            Amis secrets
+          </Text>
+          <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+            {state.secret_friends_revealed
+              ? 'Tirage effectué — chaque participant peut voir son ami secret.'
+              : 'À lancer une fois tous les participants inscrits.'}
+          </Text>
+          {secretCount !== null ? (
+            <Text style={{ color: t.success, fontSize: font.caption, marginTop: 4 }}>
+              Dernier tirage : {secretCount} participant(s).
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      <Button
+        label={state.secret_friends_revealed ? 'Relancer le tirage' : 'Lancer les amis secrets'}
+        onPress={launchSecretFriends}
+        loading={saving === 'secret'}
+        variant={state.secret_friends_revealed ? 'secondary' : 'primary'}
+      />
+
+      {state.secret_friends_revealed ? (
+        <View style={[styles.toggleRow, { marginTop: spacing.md }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: t.text, fontSize: font.body, fontWeight: '600' }}>
+              Grande révélation
+            </Text>
+            <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+              {state.secret_reveal_at
+                ? `Active depuis ${new Date(state.secret_reveal_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}. Tout le monde peut voir son donneur et son receveur.`
+                : 'À lancer à la cérémonie de clôture. Une notification push est envoyée à tous.'}
+            </Text>
+          </View>
+          <Switch
+            value={!!state.secret_reveal_at}
+            onValueChange={async (val) => {
+              setSaving('secret');
+              try {
+                const { error } = await (supabase.rpc as any)('admin_toggle_secret_reveal', { value: val });
+                if (error) throw error;
+                setState({
+                  ...state,
+                  secret_reveal_at: val ? new Date().toISOString() : null,
+                });
+                if (val) {
+                  await supabase.functions
+                    .invoke('broadcast-notification', {
+                      body: {
+                        title: 'La grande révélation est lancée ! 🎉',
+                        body: 'Découvre qui était ton ami secret.',
+                        data: { type: 'secret_reveal' },
+                      },
+                    })
+                    .catch(() => {});
+                }
+              } catch (e: any) {
+                Alert.alert('Erreur', e?.message ?? 'Échec');
+              } finally {
+                setSaving(null);
+              }
+            }}
+            disabled={saving !== null}
+            thumbColor={state.secret_reveal_at ? t.accent : undefined}
+          />
+        </View>
+      ) : null}
     </View>
   );
+}
+
+interface AdminPairing {
+  giver_id: string;
+  giver_prenom: string;
+  giver_nom: string;
+  receiver_id: string;
+  receiver_prenom: string;
+  receiver_nom: string;
+}
+
+function SecretFriendsPairingsCard() {
+  const t = useTheme();
+  const profiles = useAdminProfiles();
+  const [pairings, setPairings] = useState<AdminPairing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingGiver, setEditingGiver] = useState<string | null>(null);
+  const [chosenReceiver, setChosenReceiver] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const fetchPairings = async () => {
+    setLoading(true);
+    const { data } = await (supabase.rpc as any)('admin_list_secret_friends');
+    setPairings((data ?? []) as AdminPairing[]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchPairings();
+  }, []);
+
+  const profilesById = useMemo(() => {
+    const map = new Map<string, AdminProfile>();
+    for (const p of profiles) map.set(p.id, p);
+    return map;
+  }, [profiles]);
+
+  // Givers sans appariement (utile pour ajouter un nouvel appariement)
+  const unpaired = useMemo(() => {
+    const pairedIds = new Set(pairings.map((p) => p.giver_id));
+    return profiles.filter((p) => !pairedIds.has(p.id));
+  }, [profiles, pairings]);
+
+  const startEdit = (giverId: string) => {
+    setEditingGiver(giverId);
+    const current = pairings.find((p) => p.giver_id === giverId);
+    setChosenReceiver(current?.receiver_id ?? null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingGiver || !chosenReceiver) return;
+    if (editingGiver === chosenReceiver) {
+      Alert.alert('Erreur', "Un participant ne peut pas s'apparier à lui-même.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await (supabase.rpc as any)('admin_set_secret_friend', {
+        giver_uid: editingGiver,
+        receiver_uid: chosenReceiver,
+      });
+      if (error) throw error;
+      await fetchPairings();
+      setEditingGiver(null);
+      setChosenReceiver(null);
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message ?? 'Échec');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View style={[card(t)]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={[h2(t)]}>Appariements amis secrets</Text>
+        <Pressable onPress={fetchPairings} hitSlop={10}>
+          <Ionicons name="refresh" size={20} color={t.textMuted} />
+        </Pressable>
+      </View>
+      <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+        Modifie qui doit gâter qui. Utile si quelqu'un est absent ou si tu veux imposer un appariement précis.
+      </Text>
+
+      {loading ? (
+        <ActivityIndicator color={t.primary} style={{ marginTop: spacing.md }} />
+      ) : pairings.length === 0 ? (
+        <Text style={{ color: t.textMuted, textAlign: 'center', marginTop: spacing.md }}>
+          Aucun appariement. Lance d'abord le tirage ou crée-en un manuellement ci-dessous.
+        </Text>
+      ) : (
+        <View style={{ gap: spacing.xs, marginTop: spacing.sm }}>
+          {pairings.map((p) => {
+            const isEditing = editingGiver === p.giver_id;
+            return (
+              <View key={p.giver_id} style={{ gap: spacing.xs }}>
+                <Pressable
+                  onPress={() => (isEditing ? setEditingGiver(null) : startEdit(p.giver_id))}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.sm,
+                    padding: spacing.sm,
+                    borderRadius: radius.md,
+                    backgroundColor: isEditing ? t.primarySoft : t.surfaceAlt,
+                    borderWidth: 1,
+                    borderColor: isEditing ? t.primary : t.border,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: t.text, fontWeight: '700' }}>
+                      {p.giver_prenom} {p.giver_nom}
+                    </Text>
+                    <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+                      gâte → {p.receiver_prenom} {p.receiver_nom}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={isEditing ? 'chevron-up' : 'create-outline'}
+                    size={18}
+                    color={t.textMuted}
+                  />
+                </Pressable>
+
+                {isEditing ? (
+                  <View
+                    style={{
+                      borderWidth: 1,
+                      borderColor: t.border,
+                      borderRadius: radius.md,
+                      padding: spacing.sm,
+                      gap: spacing.sm,
+                    }}
+                  >
+                    <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+                      Choisis le nouveau receveur pour {p.giver_prenom} :
+                    </Text>
+                    <View style={{ maxHeight: 200 }}>
+                      <ScrollView nestedScrollEnabled>
+                        <View style={{ gap: 4 }}>
+                          {profiles
+                            .filter((pp) => pp.id !== p.giver_id)
+                            .map((pp) => {
+                              const sel = chosenReceiver === pp.id;
+                              return (
+                                <Pressable
+                                  key={pp.id}
+                                  onPress={() => setChosenReceiver(pp.id)}
+                                  style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: spacing.sm,
+                                    padding: spacing.sm,
+                                    borderRadius: radius.sm,
+                                    backgroundColor: sel ? t.primarySoft : 'transparent',
+                                  }}
+                                >
+                                  <Ionicons
+                                    name={sel ? 'radio-button-on' : 'radio-button-off'}
+                                    size={18}
+                                    color={sel ? t.primary : t.textMuted}
+                                  />
+                                  <Text style={{ color: t.text, fontWeight: sel ? '700' : '500' }}>
+                                    {displayName(pp) || pp.email}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                        </View>
+                      </ScrollView>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                      <Button
+                        label="Annuler"
+                        variant="ghost"
+                        onPress={() => setEditingGiver(null)}
+                        style={{ flex: 1 }}
+                      />
+                      <Button
+                        label="Enregistrer"
+                        onPress={saveEdit}
+                        loading={busy}
+                        disabled={!chosenReceiver || chosenReceiver === p.giver_id}
+                        style={{ flex: 1 }}
+                      />
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {unpaired.length > 0 ? (
+        <View
+          style={{
+            marginTop: spacing.md,
+            paddingTop: spacing.md,
+            borderTopWidth: 1,
+            borderTopColor: t.border,
+            gap: spacing.sm,
+          }}
+        >
+          <Text style={{ color: t.text, fontWeight: '700', fontSize: font.body }}>
+            Participants sans appariement ({unpaired.length})
+          </Text>
+          {unpaired.map((u) => (
+            <Pressable
+              key={u.id}
+              onPress={() => {
+                setEditingGiver(u.id);
+                setChosenReceiver(null);
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.sm,
+                padding: spacing.sm,
+                borderRadius: radius.md,
+                backgroundColor: editingGiver === u.id ? t.primarySoft : t.surfaceAlt,
+                borderWidth: 1,
+                borderColor: editingGiver === u.id ? t.primary : t.border,
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={t.accent} />
+              <Text style={{ color: t.text, fontWeight: '700', flex: 1 }}>
+                {displayName(u) || u.email}
+              </Text>
+              <Text style={{ color: t.textMuted, fontSize: font.caption }}>Apparier…</Text>
+            </Pressable>
+          ))}
+          {editingGiver && unpaired.some((u) => u.id === editingGiver) ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: t.border,
+                borderRadius: radius.md,
+                padding: spacing.sm,
+                gap: spacing.sm,
+              }}
+            >
+              <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+                Receveur pour {profilesById.get(editingGiver)?.prenom ?? '?'} :
+              </Text>
+              <View style={{ maxHeight: 200 }}>
+                <ScrollView nestedScrollEnabled>
+                  <View style={{ gap: 4 }}>
+                    {profiles
+                      .filter((pp) => pp.id !== editingGiver)
+                      .map((pp) => {
+                        const sel = chosenReceiver === pp.id;
+                        return (
+                          <Pressable
+                            key={pp.id}
+                            onPress={() => setChosenReceiver(pp.id)}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: spacing.sm,
+                              padding: spacing.sm,
+                              borderRadius: radius.sm,
+                              backgroundColor: sel ? t.primarySoft : 'transparent',
+                            }}
+                          >
+                            <Ionicons
+                              name={sel ? 'radio-button-on' : 'radio-button-off'}
+                              size={18}
+                              color={sel ? t.primary : t.textMuted}
+                            />
+                            <Text style={{ color: t.text, fontWeight: sel ? '700' : '500' }}>
+                              {displayName(pp) || pp.email}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                  </View>
+                </ScrollView>
+              </View>
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <Button
+                  label="Annuler"
+                  variant="ghost"
+                  onPress={() => setEditingGiver(null)}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  label="Apparier"
+                  onPress={saveEdit}
+                  loading={busy}
+                  disabled={!chosenReceiver || chosenReceiver === editingGiver}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function programDayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** "2026-07-03T18:15:00+02:00" → "18:15" (heure locale du device, idem que ce que voit le user) */
+function timeFromIso(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Force le format HH:mm pendant la saisie — n'accepte que des chiffres + insère ":" au bon endroit. */
+function maskTimeInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+}
+
+function isValidHHmm(v: string): boolean {
+  const m = v.match(/^(\d{2}):(\d{2})$/);
+  if (!m) return false;
+  const h = parseInt(m[1], 10);
+  const mn = parseInt(m[2], 10);
+  return h >= 0 && h <= 23 && mn >= 0 && mn <= 59;
+}
+
+/** Combine un dayKey "YYYY-MM-DD" + une heure "HH:mm" → ISO complète (UTC) */
+function isoFromDayAndTime(dayKey: string, hhmm: string): string {
+  const [y, mo, da] = dayKey.split('-').map((n) => parseInt(n, 10));
+  const [h, mn] = hhmm.split(':').map((n) => parseInt(n, 10));
+  return new Date(y, mo - 1, da, h, mn, 0, 0).toISOString();
 }
 
 function ProgramEditorCard() {
   const t = useTheme();
   const [items, setItems] = useState<ProgramItem[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ titre: '', intervenant: '', description: '', heure_debut: '', heure_fin: '' });
+  const [draft, setDraft] = useState({
+    titre: '',
+    intervenant: '',
+    description: '',
+    heure_debut: '', // "HH:mm"
+    heure_fin: '', // "HH:mm"
+    dayKey: '', // "YYYY-MM-DD" de l'élément édité (immuable pendant l'édition)
+  });
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const load = () =>
-    supabase
-      .from('program')
+    (supabase.from('program') as any)
       .select('*')
       .order('heure_debut')
-      .then(({ data }) => setItems(data ?? []));
+      .then(({ data }: { data: ProgramItem[] | null }) => setItems(data ?? []));
 
   useEffect(() => {
     load();
   }, []);
+
+  const days = useMemo(() => {
+    const map = new Map<string, ProgramItem[]>();
+    for (const it of items) {
+      const k = programDayKey(it.heure_debut);
+      const arr = map.get(k) ?? [];
+      arr.push(it);
+      map.set(k, arr);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, arr], idx) => {
+        const d = new Date(arr[0].heure_debut);
+        return {
+          key,
+          index: idx + 1,
+          label: d.toLocaleDateString('fr-FR', { weekday: 'long' }),
+          dateLabel: d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+          items: arr,
+        };
+      });
+  }, [items]);
+
+  const activeKey = selectedDay && days.some((d) => d.key === selectedDay) ? selectedDay : days[0]?.key ?? null;
+  const activeDay = days.find((d) => d.key === activeKey) ?? null;
 
   const startEdit = (it: ProgramItem) => {
     setEditingId(it.id);
@@ -326,21 +1037,33 @@ function ProgramEditorCard() {
       titre: it.titre,
       intervenant: it.intervenant ?? '',
       description: it.description ?? '',
-      heure_debut: it.heure_debut,
-      heure_fin: it.heure_fin,
+      heure_debut: timeFromIso(it.heure_debut),
+      heure_fin: timeFromIso(it.heure_fin),
+      dayKey: programDayKey(it.heure_debut),
     });
   };
 
   const save = async () => {
     if (!editingId) return;
-    const { error } = await supabase
-      .from('program')
+    if (!isValidHHmm(draft.heure_debut) || !isValidHHmm(draft.heure_fin)) {
+      Alert.alert('Heure invalide', 'Saisis les heures au format HH:mm (00-23 : 00-59).');
+      return;
+    }
+    const debutIso = isoFromDayAndTime(draft.dayKey, draft.heure_debut);
+    let finIso = isoFromDayAndTime(draft.dayKey, draft.heure_fin);
+    // Si la fin est avant le début (ex. 23:30 → 00:30), on bascule sur le jour suivant
+    if (new Date(finIso).getTime() <= new Date(debutIso).getTime()) {
+      const d = new Date(finIso);
+      d.setDate(d.getDate() + 1);
+      finIso = d.toISOString();
+    }
+    const { error } = await (supabase.from('program') as any)
       .update({
         titre: draft.titre,
         intervenant: draft.intervenant || null,
         description: draft.description || null,
-        heure_debut: draft.heure_debut,
-        heure_fin: draft.heure_fin,
+        heure_debut: debutIso,
+        heure_fin: finIso,
       })
       .eq('id', editingId);
     if (error) Alert.alert('Erreur', error.message);
@@ -354,12 +1077,79 @@ function ProgramEditorCard() {
     <View style={[card(t)]}>
       <Text style={[h2(t)]}>Programme</Text>
       <Text style={{ color: t.textMuted, fontSize: font.caption }}>
-        Tape une session pour éditer ses détails. Format ISO 8601 attendu pour les horaires (ex : 2026-05-20T09:00:00+02:00).
+        Tape une session pour éditer ses détails. Heures au format HH:mm (le jour reste celui du sous-onglet).
       </Text>
+
+      {days.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0, flexShrink: 0 }}
+          contentContainerStyle={{ flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.xs }}
+        >
+          {days.map((d) => {
+            const active = d.key === activeKey;
+            return (
+              <Pressable
+                key={d.key}
+                onPress={() => setSelectedDay(d.key)}
+                style={[
+                  styles.adminDayChip,
+                  {
+                    backgroundColor: active ? t.primary : t.surfaceAlt,
+                    borderColor: active ? t.primary : t.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: active ? (t.isDark ? t.bg : '#FFFFFF') : t.textMuted,
+                    fontWeight: '700',
+                    fontSize: font.micro,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Jour {d.index}
+                </Text>
+                <Text
+                  style={{
+                    color: active ? (t.isDark ? t.bg : '#FFFFFF') : t.text,
+                    fontWeight: '800',
+                    fontSize: font.caption,
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {d.label}
+                </Text>
+                <Text
+                  style={{
+                    color: active ? (t.isDark ? t.bg : '#FFFFFF') : t.textMuted,
+                    fontSize: font.micro,
+                  }}
+                >
+                  {d.dateLabel} · {d.items.length}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+
       <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-        {items.map((it) =>
+        {(activeDay?.items ?? []).map((it) =>
           editingId === it.id ? (
             <View key={it.id} style={[styles.editor, { borderColor: t.primary, backgroundColor: t.primarySoft }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="calendar-outline" size={14} color={t.textMuted} />
+                <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+                  {new Date(draft.dayKey).toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                  })}
+                </Text>
+              </View>
               <TextField label="Titre" value={draft.titre} onChangeText={(v) => setDraft({ ...draft, titre: v })} />
               <TextField
                 label="Intervenant"
@@ -372,18 +1162,32 @@ function ProgramEditorCard() {
                 onChangeText={(v) => setDraft({ ...draft, description: v })}
                 multiline
               />
-              <TextField
-                label="Début (ISO)"
-                value={draft.heure_debut}
-                onChangeText={(v) => setDraft({ ...draft, heure_debut: v })}
-                autoCapitalize="none"
-              />
-              <TextField
-                label="Fin (ISO)"
-                value={draft.heure_fin}
-                onChangeText={(v) => setDraft({ ...draft, heure_fin: v })}
-                autoCapitalize="none"
-              />
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label="Début"
+                    value={draft.heure_debut}
+                    onChangeText={(v) => setDraft({ ...draft, heure_debut: maskTimeInput(v) })}
+                    keyboardType="number-pad"
+                    inputMode="numeric"
+                    maxLength={5}
+                    placeholder="HH:mm"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label="Fin"
+                    value={draft.heure_fin}
+                    onChangeText={(v) => setDraft({ ...draft, heure_fin: maskTimeInput(v) })}
+                    keyboardType="number-pad"
+                    inputMode="numeric"
+                    maxLength={5}
+                    placeholder="HH:mm"
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
               <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                 <Button label="Annuler" variant="ghost" onPress={() => setEditingId(null)} style={{ flex: 1 }} />
                 <Button label="Enregistrer" onPress={save} style={{ flex: 1 }} />
@@ -397,11 +1201,16 @@ function ProgramEditorCard() {
             >
               <Text style={{ color: t.text, fontWeight: '700' }}>{it.titre}</Text>
               <Text style={{ color: t.textMuted, fontSize: font.caption }}>
-                {new Date(it.heure_debut).toLocaleString('fr-FR')} → {new Date(it.heure_fin).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                {new Date(it.heure_debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} → {new Date(it.heure_fin).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
               </Text>
             </Pressable>
           ),
         )}
+        {activeDay && activeDay.items.length === 0 ? (
+          <Text style={{ color: t.textMuted, fontSize: font.caption, textAlign: 'center' }}>
+            Aucune session ce jour-là.
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -836,7 +1645,11 @@ function DangerZoneCard() {
 interface AdminProfile {
   id: string;
   prenom: string;
+  nom: string | null;
+  date_naissance: string | null;
   email: string;
+  is_moderator?: boolean;
+  is_admin?: boolean;
 }
 
 function useAdminProfiles() {
@@ -844,7 +1657,7 @@ function useAdminProfiles() {
   useEffect(() => {
     supabase
       .from('profiles')
-      .select('id, prenom, email')
+      .select('id, prenom, nom, date_naissance, email')
       .order('prenom')
       .then(({ data }) => setProfiles((data ?? []) as AdminProfile[]));
   }, []);
@@ -904,8 +1717,17 @@ function UserMultiSelector({
                     color={isSel ? t.primary : t.textMuted}
                   />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: t.text, fontWeight: '700' }}>{p.prenom}</Text>
-                    <Text style={{ color: t.textMuted, fontSize: font.caption }}>{p.email}</Text>
+                    <Text style={{ color: t.text, fontWeight: '700' }}>
+                      {displayName(p) || p.email}
+                    </Text>
+                    {(() => {
+                      const age = ageFromDate(p.date_naissance);
+                      return age != null ? (
+                        <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+                          {age} an{age > 1 ? 's' : ''} · né(e) le {formatDateFR(p.date_naissance)}
+                        </Text>
+                      ) : null;
+                    })()}
                   </View>
                 </Pressable>
               );
@@ -1056,6 +1878,750 @@ function ResetConversationsCard() {
   );
 }
 
+function DeleteUsersCard() {
+  const t = useTheme();
+  const currentUserId = useSessionStore((s) => s.user?.id);
+  const [profiles, setProfiles] = useState<AdminProfile[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+
+  const load = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, prenom, nom, date_naissance, email, is_moderator, is_admin')
+      .order('prenom');
+    setProfiles((data ?? []) as AdminProfile[]);
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const toggleModerator = async (p: AdminProfile) => {
+    const next = !p.is_moderator;
+    const { error } = await (supabase.rpc as any)('admin_set_moderator', {
+      target_user_id: p.id,
+      value: next,
+    });
+    if (error) {
+      Alert.alert('Erreur', error.message);
+      return;
+    }
+    setProfiles((list) => list.map((x) => (x.id === p.id ? { ...x, is_moderator: next } : x)));
+  };
+
+  const toggleAdmin = (p: AdminProfile) => {
+    const next = !p.is_admin;
+    const label = displayName(p) || p.email;
+    Alert.alert(
+      next ? 'Promouvoir administrateur ?' : 'Retirer le rôle admin ?',
+      next
+        ? `« ${label} » aura un accès admin complet : envoi de questions, gestion conférence, suppression de comptes…`
+        : `« ${label} » perdra tout accès administrateur.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: next ? 'Promouvoir' : 'Rétrograder',
+          style: next ? 'default' : 'destructive',
+          onPress: async () => {
+            const { error } = await (supabase.rpc as any)('admin_set_admin', {
+              target_user_id: p.id,
+              value: next,
+            });
+            if (error) {
+              Alert.alert('Erreur', error.message);
+              return;
+            }
+            setProfiles((list) =>
+              list.map((x) =>
+                x.id === p.id
+                  ? { ...x, is_admin: next, is_moderator: next ? false : x.is_moderator }
+                  : x,
+              ),
+            );
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDelete = (p: AdminProfile) => {
+    if (p.id === currentUserId) {
+      Alert.alert('Impossible', 'Tu ne peux pas te supprimer toi-même.');
+      return;
+    }
+    const label = displayName(p) || p.email;
+    Alert.alert(
+      'Supprimer cet utilisateur ?',
+      `« ${label} » (${p.email}) sera DÉFINITIVEMENT supprimé : compte auth, profil, jauges, réponses, ami secret, FAQ, etc. Action irréversible.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy(p.id);
+            try {
+              const { error } = await (supabase.rpc as any)('admin_delete_user', {
+                target_user_id: p.id,
+              });
+              if (error) throw error;
+              setProfiles((list) => list.filter((x) => x.id !== p.id));
+            } catch (e: any) {
+              Alert.alert('Erreur', e?.message ?? 'Échec de la suppression');
+            } finally {
+              setBusy(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return profiles;
+    return profiles.filter(
+      (p) =>
+        p.prenom.toLowerCase().includes(q) ||
+        (p.nom ?? '').toLowerCase().includes(q) ||
+        p.email.toLowerCase().includes(q),
+    );
+  }, [profiles, filter]);
+
+  return (
+    <View style={[card(t), { borderColor: t.danger }]}>
+      <Text style={[h2(t), { color: t.danger }]}>Gérer les utilisateurs</Text>
+      <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+        Bouton étoile ⭐ : promeut/rétrograde un administrateur (accès complet).{'\n'}
+        Bouton bouclier 🛡️ : promeut/rétrograde un modérateur (accès à la modération FAQ uniquement).{'\n'}
+        Bouton corbeille 🗑️ : supprime DÉFINITIVEMENT un compte (irréversible).
+      </Text>
+      <TextInput
+        value={filter}
+        onChangeText={setFilter}
+        placeholder="Filtrer par prénom ou email…"
+        placeholderTextColor={t.textMuted}
+        autoCapitalize="none"
+        style={[
+          styles.qRow,
+          { color: t.text, backgroundColor: t.surfaceAlt, borderColor: t.border, fontSize: font.body },
+        ]}
+      />
+      <View style={{ maxHeight: 320 }}>
+        <ScrollView nestedScrollEnabled>
+          <View style={{ gap: spacing.xs }}>
+            {filtered.length === 0 ? (
+              <Text style={{ color: t.textMuted, fontSize: font.caption }}>Aucun résultat.</Text>
+            ) : (
+              filtered.map((p) => {
+                const isSelf = p.id === currentUserId;
+                return (
+                  <View
+                    key={p.id}
+                    style={[
+                      styles.qRow,
+                      {
+                        backgroundColor: t.surfaceAlt,
+                        borderColor: t.border,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: spacing.sm,
+                      },
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: t.text, fontWeight: '700' }}>
+                        {displayName(p) || p.email}
+                        {isSelf ? ' (toi)' : ''}
+                        {p.is_admin ? ' · admin' : p.is_moderator ? ' · modérateur' : ''}
+                      </Text>
+                      {(() => {
+                        const age = ageFromDate(p.date_naissance);
+                        return age != null ? (
+                          <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+                            {age} an{age > 1 ? 's' : ''} · {formatDateFR(p.date_naissance)}
+                          </Text>
+                        ) : null;
+                      })()}
+                    </View>
+                    <Pressable
+                      onPress={() => toggleAdmin(p)}
+                      disabled={isSelf && p.is_admin}
+                      hitSlop={8}
+                      style={{ padding: 8, opacity: isSelf && p.is_admin ? 0.3 : 1 }}
+                      accessibilityLabel={p.is_admin ? 'Retirer le rôle admin' : 'Promouvoir administrateur'}
+                    >
+                      <Ionicons
+                        name={p.is_admin ? 'star' : 'star-outline'}
+                        size={22}
+                        color={p.is_admin ? t.primary : t.textMuted}
+                      />
+                    </Pressable>
+                    {!p.is_admin ? (
+                      <Pressable
+                        onPress={() => toggleModerator(p)}
+                        hitSlop={8}
+                        style={{ padding: 8 }}
+                        accessibilityLabel={p.is_moderator ? 'Retirer le rôle de modérateur' : 'Promouvoir modérateur'}
+                      >
+                        <Ionicons
+                          name={p.is_moderator ? 'shield-checkmark' : 'shield-outline'}
+                          size={22}
+                          color={p.is_moderator ? t.accent : t.textMuted}
+                        />
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      onPress={() => handleDelete(p)}
+                      disabled={isSelf || busy === p.id}
+                      hitSlop={8}
+                      style={{
+                        padding: 8,
+                        opacity: isSelf ? 0.3 : 1,
+                      }}
+                    >
+                      {busy === p.id ? (
+                        <ActivityIndicator color={t.danger} />
+                      ) : (
+                        <Ionicons name="trash-outline" size={22} color={t.danger} />
+                      )}
+                    </Pressable>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    </View>
+  );
+}
+
+interface AdminSecretMessage {
+  id: string;
+  contenu: string;
+  created_at: string;
+  sender_prenom: string;
+  sender_nom: string;
+  receiver_prenom: string;
+  receiver_nom: string;
+}
+
+function SecretMessagesModCard() {
+  const t = useTheme();
+  const [messages, setMessages] = useState<AdminSecretMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchMessages = async () => {
+    setLoading(true);
+    const { data, error } = await (supabase.rpc as any)('admin_get_secret_messages');
+    if (!error && data) setMessages(data as AdminSecretMessage[]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchMessages();
+  }, []);
+
+  const deleteMessage = (msg: AdminSecretMessage) => {
+    Alert.alert(
+      'Supprimer ce message ?',
+      `De ${msg.sender_prenom} à ${msg.receiver_prenom} :\n"${msg.contenu.slice(0, 80)}${msg.contenu.length > 80 ? '…' : ''}"`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await supabase.from('secret_messages').delete().eq('id', msg.id);
+            if (error) {
+              Alert.alert('Erreur', error.message);
+            } else {
+              setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  return (
+    <View style={[card(t)]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={[h2(t)]}>Messages amis secrets</Text>
+        <Pressable onPress={fetchMessages} hitSlop={10}>
+          <Ionicons name="refresh" size={20} color={t.textMuted} />
+        </Pressable>
+      </View>
+      <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+        Tous les messages échangés entre amis secrets. Supprime ceux qui ne sont pas appropriés.
+      </Text>
+
+      {loading ? (
+        <ActivityIndicator color={t.primary} style={{ marginTop: spacing.md }} />
+      ) : messages.length === 0 ? (
+        <Text style={{ color: t.textMuted, textAlign: 'center', marginTop: spacing.md }}>
+          Aucun message envoyé pour l'instant.
+        </Text>
+      ) : (
+        <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+          {messages.map((msg) => (
+            <View
+              key={msg.id}
+              style={{
+                backgroundColor: t.surfaceAlt,
+                borderRadius: radius.md,
+                padding: spacing.md,
+                gap: 4,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={{ color: t.accent, fontSize: font.micro, fontWeight: '700', flex: 1 }}>
+                  {msg.sender_prenom} {msg.sender_nom} → {msg.receiver_prenom} {msg.receiver_nom}
+                </Text>
+                <Pressable onPress={() => deleteMessage(msg)} hitSlop={8}>
+                  <Ionicons name="trash-outline" size={18} color={t.danger} />
+                </Pressable>
+              </View>
+              <Text style={{ color: t.text, fontSize: font.body, lineHeight: 20 }}>{msg.contenu}</Text>
+              <Text style={{ color: t.textMuted, fontSize: font.micro }}>
+                {new Date(msg.created_at).toLocaleString('fr-FR', {
+                  day: '2-digit',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function SermonsManagerCard() {
+  const t = useTheme();
+  const [sermons, setSermons] = useState<Sermon[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Partial<Sermon>>({});
+  const [busy, setBusy] = useState(false);
+  const [openSermonForFaq, setOpenSermonForFaq] = useState<Sermon | null>(null);
+  const [faqList, setFaqList] = useState<(FaqQuestion & { likes_count: number })[]>([]);
+
+  const load = async () => {
+    const { data, error } = await supabase
+      .from('sermons')
+      .select('*')
+      .order('debut_at', { ascending: true });
+    if (error) Alert.alert('Erreur', error.message);
+    else setSermons((data ?? []) as Sermon[]);
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  useEffect(() => {
+    if (!openSermonForFaq) return;
+    const reload = async () => {
+      const [{ data: qs }, { data: likes }] = await Promise.all([
+        supabase.from('faq_questions').select('*').eq('sermon_id', openSermonForFaq.id),
+        supabase.from('faq_likes').select('question_id'),
+      ]);
+      const countByQ = new Map<string, number>();
+      for (const l of (likes ?? []) as { question_id: string }[]) {
+        countByQ.set(l.question_id, (countByQ.get(l.question_id) ?? 0) + 1);
+      }
+      const withLikes: (FaqQuestion & { likes_count: number })[] = ((qs ?? []) as FaqQuestion[]).map(
+        (q) => ({ ...q, likes_count: countByQ.get(q.id) ?? 0 }),
+      );
+      withLikes.sort((a, b) => {
+        if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+        if (a.likes_count !== b.likes_count) return b.likes_count - a.likes_count;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+      setFaqList(withLikes);
+    };
+    reload();
+    const ch = supabase
+      .channel(`admin-faq-${openSermonForFaq.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'faq_questions',
+          filter: `sermon_id=eq.${openSermonForFaq.id}`,
+        },
+        reload,
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'faq_likes' }, reload)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [openSermonForFaq?.id]);
+
+  const startCreate = () =>
+    setDraft({
+      titre: '',
+      intervenant: '',
+      theme: '',
+      description: '',
+      debut_at: '',
+      fin_at: '',
+      faq_offset_minutes: 120,
+    });
+
+  const startEdit = (s: Sermon) => {
+    setEditingId(s.id);
+    setDraft({ ...s });
+  };
+
+  const cancel = () => {
+    setEditingId(null);
+    setDraft({});
+  };
+
+  const save = async () => {
+    if (!draft.titre || !draft.intervenant || !draft.theme || !draft.debut_at || !draft.fin_at) {
+      Alert.alert('Champs requis', 'Titre, intervenant, thème, début et fin sont obligatoires.');
+      return;
+    }
+    setBusy(true);
+    try {
+      if (editingId) {
+        const { error } = await (supabase.from('sermons') as any).update(draft).eq('id', editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase.from('sermons') as any).insert(draft);
+        if (error) throw error;
+      }
+      cancel();
+      await load();
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message ?? 'Échec');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = (s: Sermon) =>
+    Alert.alert('Supprimer ce sermon ?', `« ${s.titre} » et ses Q/R seront effacés.`, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase.from('sermons').delete().eq('id', s.id);
+          if (error) Alert.alert('Erreur', error.message);
+          else await load();
+        },
+      },
+    ]);
+
+  const togglePinned = async (q: FaqQuestion) => {
+    const { error } = await (supabase.from('faq_questions') as any)
+      .update({ is_pinned: !q.is_pinned })
+      .eq('id', q.id);
+    if (error) Alert.alert('Erreur', error.message);
+  };
+
+  const toggleAnswered = async (q: FaqQuestion) => {
+    const { error } = await (supabase.from('faq_questions') as any)
+      .update({ is_answered: !q.is_answered })
+      .eq('id', q.id);
+    if (error) Alert.alert('Erreur', error.message);
+  };
+
+  const removeFaq = async (q: FaqQuestion) => {
+    const { error } = await supabase.from('faq_questions').delete().eq('id', q.id);
+    if (error) Alert.alert('Erreur', error.message);
+  };
+
+  const announceFaqOpen = (s: Sermon) =>
+    Alert.alert(
+      'Annoncer la FAQ ?',
+      `Envoyer un push à tous : « La FAQ de ${s.intervenant} est ouverte ». Le thème sera inclus.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Envoyer',
+          onPress: async () => {
+            const { error } = await supabase.functions.invoke('broadcast-notification', {
+              body: {
+                title: `FAQ ouverte — ${s.intervenant}`,
+                body: `Pose tes questions sur « ${s.theme} » avant et pendant la wa3za.`,
+                data: { type: 'sermon_faq', sermon_id: s.id },
+              },
+            });
+            if (error) Alert.alert('Erreur', error.message);
+            else Alert.alert('Notification envoyée');
+          },
+        },
+      ],
+    );
+
+  const toggleManualOpen = async (s: Sermon) => {
+    const next = !s.manual_open;
+    const { error } = await (supabase.from('sermons') as any)
+      .update({ manual_open: next })
+      .eq('id', s.id);
+    if (error) {
+      Alert.alert('Erreur', error.message);
+      return;
+    }
+    setSermons((list) => list.map((x) => (x.id === s.id ? { ...x, manual_open: next } : x)));
+  };
+
+
+  return (
+    <View style={[card(t)]}>
+      <Text style={[h2(t)]}>Sermons & FAQ</Text>
+      <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+        La FAQ s'ouvre automatiquement 2 h avant chaque sermon. Tu peux aussi annoncer manuellement.
+      </Text>
+
+      <View style={{ gap: spacing.sm }}>
+        {sermons.map((s) =>
+          editingId === s.id ? (
+            <View key={s.id} style={[styles.editor, { borderColor: t.primary, backgroundColor: t.primarySoft }]}>
+              <TextField label="Titre" value={draft.titre ?? ''} onChangeText={(v) => setDraft({ ...draft, titre: v })} />
+              <TextField
+                label="Intervenant"
+                value={draft.intervenant ?? ''}
+                onChangeText={(v) => setDraft({ ...draft, intervenant: v })}
+              />
+              <TextField label="Thème" value={draft.theme ?? ''} onChangeText={(v) => setDraft({ ...draft, theme: v })} />
+              <TextField
+                label="Description"
+                value={draft.description ?? ''}
+                onChangeText={(v) => setDraft({ ...draft, description: v })}
+                multiline
+              />
+              <TextField
+                label="Début (ISO)"
+                value={draft.debut_at ?? ''}
+                onChangeText={(v) => setDraft({ ...draft, debut_at: v })}
+                autoCapitalize="none"
+              />
+              <TextField
+                label="Fin (ISO)"
+                value={draft.fin_at ?? ''}
+                onChangeText={(v) => setDraft({ ...draft, fin_at: v })}
+                autoCapitalize="none"
+              />
+              <TextField
+                label="Délai d'ouverture FAQ (minutes avant début)"
+                value={String(draft.faq_offset_minutes ?? 120)}
+                onChangeText={(v) =>
+                  setDraft({ ...draft, faq_offset_minutes: Number.parseInt(v.replace(/[^0-9]/g, ''), 10) || 0 })
+                }
+                keyboardType="number-pad"
+              />
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <Button label="Annuler" variant="ghost" onPress={cancel} style={{ flex: 1 }} />
+                <Button label="Enregistrer" onPress={save} loading={busy} style={{ flex: 1 }} />
+              </View>
+            </View>
+          ) : (
+            <View
+              key={s.id}
+              style={[styles.qRow, { backgroundColor: t.surfaceAlt, borderColor: t.border, gap: spacing.xs }]}
+            >
+              <Text style={{ color: t.text, fontWeight: '800' }}>{s.titre}</Text>
+              <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+                {s.intervenant} · « {s.theme} »
+              </Text>
+              <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+                {new Date(s.debut_at).toLocaleString('fr-FR')} → {new Date(s.fin_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.sm,
+                  marginTop: spacing.xs,
+                  padding: spacing.sm,
+                  borderRadius: 10,
+                  backgroundColor: s.manual_open ? t.primarySoft : 'transparent',
+                  borderWidth: 1,
+                  borderColor: s.manual_open ? t.primary : t.border,
+                }}
+              >
+                <Ionicons
+                  name={s.manual_open ? 'radio-button-on' : 'radio-button-off'}
+                  size={18}
+                  color={s.manual_open ? t.primary : t.textMuted}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: t.text, fontWeight: '700', fontSize: font.caption }}>
+                    FAQ {s.manual_open ? 'lancée' : 'fermée'}
+                  </Text>
+                  <Text style={{ color: t.textMuted, fontSize: font.micro }}>
+                    {s.manual_open
+                      ? 'L\'onglet FAQ est visible chez tous les participants.'
+                      : 'Bascule pour ouvrir la FAQ et faire apparaître l\'onglet.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={s.manual_open}
+                  onValueChange={() => toggleManualOpen(s)}
+                  thumbColor={s.manual_open ? t.accent : undefined}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: spacing.xs, flexWrap: 'wrap' }}>
+                <Pressable
+                  onPress={() => setOpenSermonForFaq(s)}
+                  style={[styles.miniBtn, { backgroundColor: t.primarySoft, borderColor: t.primary }]}
+                >
+                  <Ionicons name="chatbubbles-outline" size={14} color={t.text} />
+                  <Text style={{ color: t.text, fontSize: font.caption, fontWeight: '700' }}>Q/R</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => announceFaqOpen(s)}
+                  style={[styles.miniBtn, { backgroundColor: t.surfaceAlt, borderColor: t.border }]}
+                >
+                  <Ionicons name="megaphone-outline" size={14} color={t.text} />
+                  <Text style={{ color: t.text, fontSize: font.caption, fontWeight: '700' }}>Annoncer</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => startEdit(s)}
+                  style={[styles.miniBtn, { backgroundColor: t.surfaceAlt, borderColor: t.border }]}
+                >
+                  <Ionicons name="create-outline" size={14} color={t.text} />
+                  <Text style={{ color: t.text, fontSize: font.caption, fontWeight: '700' }}>Éditer</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => remove(s)}
+                  style={[styles.miniBtn, { backgroundColor: t.surfaceAlt, borderColor: t.danger }]}
+                >
+                  <Ionicons name="trash-outline" size={14} color={t.danger} />
+                  <Text style={{ color: t.danger, fontSize: font.caption, fontWeight: '700' }}>Suppr.</Text>
+                </Pressable>
+              </View>
+            </View>
+          ),
+        )}
+      </View>
+
+      {editingId === null && !draft.titre ? (
+        <Button label="Ajouter un sermon" onPress={startCreate} variant="secondary" />
+      ) : editingId === null ? (
+        <View style={[styles.editor, { borderColor: t.primary, backgroundColor: t.primarySoft }]}>
+          <Text style={{ color: t.text, fontWeight: '800' }}>Nouveau sermon</Text>
+          <TextField label="Titre" value={draft.titre ?? ''} onChangeText={(v) => setDraft({ ...draft, titre: v })} />
+          <TextField
+            label="Intervenant"
+            value={draft.intervenant ?? ''}
+            onChangeText={(v) => setDraft({ ...draft, intervenant: v })}
+          />
+          <TextField label="Thème" value={draft.theme ?? ''} onChangeText={(v) => setDraft({ ...draft, theme: v })} />
+          <TextField
+            label="Description"
+            value={draft.description ?? ''}
+            onChangeText={(v) => setDraft({ ...draft, description: v })}
+            multiline
+          />
+          <TextField
+            label="Début (ISO)"
+            value={draft.debut_at ?? ''}
+            onChangeText={(v) => setDraft({ ...draft, debut_at: v })}
+            autoCapitalize="none"
+          />
+          <TextField
+            label="Fin (ISO)"
+            value={draft.fin_at ?? ''}
+            onChangeText={(v) => setDraft({ ...draft, fin_at: v })}
+            autoCapitalize="none"
+          />
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <Button label="Annuler" variant="ghost" onPress={cancel} style={{ flex: 1 }} />
+            <Button label="Créer" onPress={save} loading={busy} style={{ flex: 1 }} />
+          </View>
+        </View>
+      ) : null}
+
+      {openSermonForFaq ? (
+        <View style={[card(t), { borderColor: t.accent }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={[h2(t)]}>Q/R — {openSermonForFaq.intervenant}</Text>
+            <Pressable onPress={() => setOpenSermonForFaq(null)} hitSlop={10}>
+              <Ionicons name="close" size={22} color={t.text} />
+            </Pressable>
+          </View>
+          {faqList.length === 0 ? (
+            <Text style={{ color: t.textMuted, fontSize: font.caption }}>Aucune question pour l'instant.</Text>
+          ) : (
+            faqList.map((q) => (
+              <View
+                key={q.id}
+                style={[
+                  styles.qRow,
+                  {
+                    backgroundColor: q.is_answered ? t.primarySoft : t.surfaceAlt,
+                    borderColor: q.is_pinned ? t.accent : t.border,
+                    borderWidth: q.is_pinned ? 2 : 1,
+                  },
+                ]}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="eye-off-outline" size={14} color={t.textMuted} />
+                    <Text style={{ color: t.textMuted, fontWeight: '700', fontSize: font.caption }}>
+                      Question anonyme
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="heart" size={14} color={t.danger} />
+                    <Text style={{ color: t.text, fontWeight: '800', fontSize: font.caption }}>
+                      {q.likes_count}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ color: t.text, fontSize: font.body, marginTop: 2 }}>{q.texte}</Text>
+                <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: spacing.xs, flexWrap: 'wrap' }}>
+                  <Pressable
+                    onPress={() => togglePinned(q)}
+                    style={[styles.miniBtn, { backgroundColor: q.is_pinned ? t.accent : t.surfaceAlt, borderColor: t.border }]}
+                  >
+                    <Ionicons name={q.is_pinned ? 'pin' : 'pin-outline'} size={14} color={q.is_pinned ? '#FFFFFF' : t.text} />
+                    <Text style={{ color: q.is_pinned ? '#FFFFFF' : t.text, fontSize: font.caption, fontWeight: '700' }}>
+                      {q.is_pinned ? 'Désépingler' : 'Épingler'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => toggleAnswered(q)}
+                    style={[styles.miniBtn, { backgroundColor: q.is_answered ? t.success : t.surfaceAlt, borderColor: t.border }]}
+                  >
+                    <Ionicons
+                      name={q.is_answered ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                      size={14}
+                      color={q.is_answered ? '#FFFFFF' : t.text}
+                    />
+                    <Text style={{ color: q.is_answered ? '#FFFFFF' : t.text, fontSize: font.caption, fontWeight: '700' }}>
+                      {q.is_answered ? 'Répondue' : 'À répondre'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => removeFaq(q)}
+                    style={[styles.miniBtn, { backgroundColor: t.surfaceAlt, borderColor: t.danger }]}
+                  >
+                    <Ionicons name="trash-outline" size={14} color={t.danger} />
+                    <Text style={{ color: t.danger, fontSize: font.caption, fontWeight: '700' }}>Suppr.</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function TabBtn({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   const t = useTheme();
   return (
@@ -1139,5 +2705,38 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  statBox: {
+    minWidth: '47%',
+    flexGrow: 1,
+    flexBasis: '47%',
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  badgeStat: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  adminDayChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 12,
+    borderWidth: 1,
+    minWidth: 100,
+    gap: 2,
+  },
+  miniBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
   editor: { borderWidth: 1, borderRadius: 12, padding: spacing.md, gap: spacing.sm },
 });

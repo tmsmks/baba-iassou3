@@ -8,8 +8,11 @@ export interface Profile {
   id: string;
   email: string;
   prenom: string;
+  nom: string | null;
+  date_naissance: string | null; // "YYYY-MM-DD"
   provider: AuthProvider;
   is_admin: boolean;
+  is_moderator: boolean;
   onboarding_completed_at: string | null;
   created_at: string;
 }
@@ -81,7 +84,57 @@ export interface ConferenceState {
   id: true;
   is_finished: boolean;
   current_question_id: string | null;
+  gauges_unlocked: boolean;
+  secret_friends_revealed: boolean;
+  secret_reveal_at: string | null;
   updated_at: string;
+}
+
+export interface Sermon {
+  id: string;
+  titre: string;
+  intervenant: string;
+  theme: string;
+  description: string | null;
+  debut_at: string;
+  fin_at: string;
+  faq_offset_minutes: number;
+  manual_open: boolean;
+  created_at: string;
+}
+
+export interface FaqQuestion {
+  id: string;
+  sermon_id: string;
+  user_id: string;
+  prenom: string | null; // toujours null désormais — anonymisation forcée par trigger
+  texte: string;
+  is_pinned: boolean;
+  is_answered: boolean;
+  created_at: string;
+}
+
+export interface SecretFriend {
+  giver_id: string;
+  receiver_id: string;
+  created_at: string;
+}
+
+export interface Photo {
+  id: string;
+  user_id: string;
+  url: string;
+  storage_path: string | null;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+}
+
+export interface PhotoLike {
+  photo_id: string;
+  user_id: string;
+  created_at: string;
 }
 
 export interface ProgramItem {
@@ -117,6 +170,9 @@ export interface Database {
       program: { Row: ProgramItem; Insert: Omit<ProgramItem, 'id'>; Update: Partial<ProgramItem> };
       program_favorites: { Row: { user_id: string; program_id: string; created_at: string }; Insert: { user_id: string; program_id: string }; Update: never };
       chants: { Row: Chant; Insert: Omit<Chant, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<Chant> };
+      sermons: { Row: Sermon; Insert: Omit<Sermon, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<Sermon> };
+      faq_questions: { Row: FaqQuestion; Insert: Omit<FaqQuestion, 'id' | 'created_at' | 'is_pinned' | 'is_answered'> & { id?: string; created_at?: string; is_pinned?: boolean; is_answered?: boolean }; Update: Partial<FaqQuestion> };
+      secret_friends: { Row: SecretFriend; Insert: Omit<SecretFriend, 'created_at'> & { created_at?: string }; Update: Partial<SecretFriend> };
     };
   };
 }

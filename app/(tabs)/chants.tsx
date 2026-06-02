@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -8,8 +7,8 @@ import {
   Text,
   View,
 } from 'react-native';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
 import { Screen } from '@/components/Screen';
 import { font, radius, spacing, useTheme } from '@/lib/theme';
 import { useChants } from '@/hooks/useChants';
@@ -19,18 +18,14 @@ import type { Chant } from '@/types/database';
 export default function ChantsScreen() {
   const t = useTheme();
   const { data, isLoading } = useChants();
-  const { refreshing, onRefresh } = useAppRefresh([['chants']]);
+  const { refreshing, onRefresh } = useAppRefresh();
 
-  const openChant = async (chant: Chant) => {
-    try {
-      await WebBrowser.openBrowserAsync(chant.url, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-        toolbarColor: t.bg,
-        controlsColor: t.primary,
-      });
-    } catch (e: any) {
-      Alert.alert("Impossible d'ouvrir le chant", e?.message ?? 'Lien invalide');
-    }
+  const openChant = (chant: Chant) => {
+    // Ouvre le PDF dans le visualiseur intégré (app/chant.tsx) au lieu de Safari.
+    router.push({
+      pathname: '/chant',
+      params: { id: chant.id, url: chant.url, titre: chant.titre },
+    });
   };
 
   if (isLoading) {
