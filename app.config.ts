@@ -59,8 +59,6 @@ const config: ExpoConfig = {
       CFBundleDisplayName: APP_DISPLAY_NAME,
       CFBundleName: APP_DISPLAY_NAME,
       UIBackgroundModes: ['remote-notification'],
-      NSUserTrackingUsageDescription:
-        "Aucun tracking publicitaire. Cette permission n'est utilisée que pour les notifications de la conférence.",
     },
   },
   android: {

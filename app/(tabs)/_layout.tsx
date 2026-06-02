@@ -101,6 +101,16 @@ export default function TabsLayout() {
                   <Ionicons name="help-circle-outline" size={26} color={t.text} />
                 </Pressable>
               </Link>
+              <Link href="/compte" asChild>
+                <Pressable
+                  hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+                  style={{ paddingLeft: spacing.md }}
+                  accessibilityLabel="Mon compte"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="person-circle-outline" size={26} color={t.text} />
+                </Pressable>
+              </Link>
               {showSecret ? (
                 <Link href="/amis-secret" asChild>
                   <Pressable

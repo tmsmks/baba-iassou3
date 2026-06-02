@@ -152,6 +152,7 @@ function RootLayout() {
             <Stack.Screen name="reveal" options={{ presentation: 'modal' }} />
             <Stack.Screen name="photos" options={{ presentation: 'modal' }} />
             <Stack.Screen name="chant" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="compte" options={{ presentation: 'modal' }} />
             <Stack.Screen name="onboarding" />
           </Stack>
         </PersistQueryClientProvider>
