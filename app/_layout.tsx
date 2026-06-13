@@ -95,9 +95,12 @@ function Bootstrap() {
         router.push('/reveal');
       } else if (data && typeof data === 'object' && (data as any).type === 'sermon_faq') {
         router.push({
-          pathname: '/(tabs)/faq',
-          params: { sermon_id: (data as any).sermon_id },
+          pathname: '/(tabs)/sermons',
+          params: { sermon_id: (data as any).sermon_id, tab: 'faq' },
         });
+      } else if (data && typeof data === 'object' && (data as any).type === 'sermon_quiz') {
+        // Le vote du quiz se fait dans le chat principal (baba IAssou3 pose la question).
+        router.push('/(tabs)/chat');
       }
     };
 

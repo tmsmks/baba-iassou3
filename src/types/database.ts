@@ -114,6 +114,38 @@ export interface FaqQuestion {
   created_at: string;
 }
 
+export type QuizPhase = 'before' | 'after';
+
+export interface SermonQuiz {
+  id: string;
+  sermon_id: string;
+  question: string;
+  lettre: Lettre;
+  before_open: boolean;
+  after_open: boolean;
+  created_at: string;
+}
+
+export interface SermonQuizOption {
+  id: string;
+  quiz_id: string;
+  texte: string;
+  ordre: number;
+  is_positive: boolean;
+  score: number; // 0-5
+  created_at: string;
+}
+
+export interface SermonQuizVote {
+  id: string;
+  quiz_id: string;
+  user_id: string;
+  phase: QuizPhase;
+  option_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SecretFriend {
   giver_id: string;
   receiver_id: string;
@@ -173,6 +205,9 @@ export interface Database {
       sermons: { Row: Sermon; Insert: Omit<Sermon, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<Sermon> };
       faq_questions: { Row: FaqQuestion; Insert: Omit<FaqQuestion, 'id' | 'created_at' | 'is_pinned' | 'is_answered'> & { id?: string; created_at?: string; is_pinned?: boolean; is_answered?: boolean }; Update: Partial<FaqQuestion> };
       secret_friends: { Row: SecretFriend; Insert: Omit<SecretFriend, 'created_at'> & { created_at?: string }; Update: Partial<SecretFriend> };
+      sermon_quiz: { Row: SermonQuiz; Insert: Omit<SermonQuiz, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<SermonQuiz> };
+      sermon_quiz_options: { Row: SermonQuizOption; Insert: Omit<SermonQuizOption, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<SermonQuizOption> };
+      sermon_quiz_votes: { Row: SermonQuizVote; Insert: Omit<SermonQuizVote, 'id' | 'created_at' | 'updated_at'> & { id?: string; created_at?: string; updated_at?: string }; Update: Partial<SermonQuizVote> };
     };
   };
 }

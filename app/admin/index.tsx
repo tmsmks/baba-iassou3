@@ -23,6 +23,7 @@ import { font, lettreColors, radius, spacing, useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session';
 import { sendQuestion } from '@/lib/ai';
+import { QuizManagerCard } from '@/components/admin/QuizManagerCard';
 import type { Chant, ConferenceState, FaqQuestion, Lettre, ProgramItem, Question, Sermon } from '@/types/database';
 import { ageFromDate, displayName, formatDateFR } from '@/lib/display';
 
@@ -2208,6 +2209,7 @@ function SermonsManagerCard() {
   const [draft, setDraft] = useState<Partial<Sermon>>({});
   const [busy, setBusy] = useState(false);
   const [openSermonForFaq, setOpenSermonForFaq] = useState<Sermon | null>(null);
+  const [openSermonForQuiz, setOpenSermonForQuiz] = useState<Sermon | null>(null);
   const [faqList, setFaqList] = useState<(FaqQuestion & { likes_count: number })[]>([]);
 
   const load = async () => {
@@ -2481,6 +2483,13 @@ function SermonsManagerCard() {
                   <Text style={{ color: t.text, fontSize: font.caption, fontWeight: '700' }}>Q/R</Text>
                 </Pressable>
                 <Pressable
+                  onPress={() => setOpenSermonForQuiz(s)}
+                  style={[styles.miniBtn, { backgroundColor: t.primarySoft, borderColor: t.primary }]}
+                >
+                  <Ionicons name="bar-chart-outline" size={14} color={t.text} />
+                  <Text style={{ color: t.text, fontSize: font.caption, fontWeight: '700' }}>Quiz</Text>
+                </Pressable>
+                <Pressable
                   onPress={() => announceFaqOpen(s)}
                   style={[styles.miniBtn, { backgroundColor: t.surfaceAlt, borderColor: t.border }]}
                 >
@@ -2542,6 +2551,10 @@ function SermonsManagerCard() {
             <Button label="Créer" onPress={save} loading={busy} style={{ flex: 1 }} />
           </View>
         </View>
+      ) : null}
+
+      {openSermonForQuiz ? (
+        <QuizManagerCard sermon={openSermonForQuiz} onClose={() => setOpenSermonForQuiz(null)} />
       ) : null}
 
       {openSermonForFaq ? (

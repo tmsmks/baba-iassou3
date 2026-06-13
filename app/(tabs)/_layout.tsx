@@ -5,7 +5,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { font, spacing, useTheme } from '@/lib/theme';
 import { useSessionStore } from '@/store/session';
-import { useOpenSermons } from '@/hooks/useSermons';
+import { useActiveSermons } from '@/hooks/useSermons';
 import { useConferenceState } from '@/hooks/useGauges';
 import { useFaqBadge } from '@/hooks/useFaqBadge';
 import { assets } from '@/lib/assets';
@@ -39,10 +39,12 @@ export default function TabsLayout() {
   // L'icône admin (construct) reste visible partout pour les admins.
   // L'icône modérateur (shield) n'apparaît que sur l'onglet FAQ.
   const showAdminButton = !!isAdmin;
-  const { data: openSermons } = useOpenSermons();
+  const { data: activeSermons } = useActiveSermons();
   const { data: conf } = useConferenceState();
   const { hasNewFaq } = useFaqBadge();
-  const showFaq = (openSermons?.length ?? 0) > 0;
+  const showSermons = (activeSermons?.length ?? 0) > 0;
+  // Le badge ne concerne que la FAQ : on ne le montre que si une FAQ est ouverte.
+  const hasOpenFaq = (activeSermons ?? []).some((s) => s.faqOpen);
   const showSecret = !!conf?.secret_friends_revealed;
 
   return (
@@ -174,13 +176,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="faq"
+        name="sermons"
         options={{
-          title: 'Q/R sermon',
-          tabBarLabel: 'FAQ',
-          tabBarIcon: ({ color, size }) => <Ionicons name="help-buoy" size={size} color={color} />,
-          href: showFaq ? '/faq' : null,
-          tabBarBadge: showFaq && hasNewFaq ? '' : undefined,
+          title: 'Sermons',
+          tabBarLabel: 'Sermons',
+          tabBarIcon: ({ color, size }) => <Ionicons name="book" size={size} color={color} />,
+          href: showSermons ? '/sermons' : null,
+          tabBarBadge: showSermons && hasOpenFaq && hasNewFaq ? '' : undefined,
           tabBarBadgeStyle: {
             backgroundColor: t.danger,
             minWidth: 10,

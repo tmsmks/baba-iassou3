@@ -6,19 +6,22 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Screen } from '@/components/Screen';
 import { ChatBubble } from '@/components/ChatBubble';
 import { ChatInput } from '@/components/ChatInput';
-import { font, spacing, useTheme } from '@/lib/theme';
+import { font, radius, spacing, useTheme } from '@/lib/theme';
 import { useChatThread, useSendChatResponse } from '@/hooks/useChat';
+import { useOpenQuizPrompts, useSubmitQuizVote, type QuizPromptOption } from '@/hooks/useSermonQuiz';
 import { useAppRefresh } from '@/hooks/useAppRefresh';
 import { assets } from '@/lib/assets';
 import { supabase } from '@/lib/supabase';
@@ -28,7 +31,8 @@ type Lettre = 'C' | 'H' | 'O' | 'I' | 'X';
 
 type Bubble =
   | { id: string; from: 'ai'; text: string; lettre?: Lettre; thinking?: boolean }
-  | { id: string; from: 'user'; text: string; score?: number | null };
+  | { id: string; from: 'user'; text: string; score?: number | null }
+  | { id: string; from: 'quiz'; quizId: string; phase: 'before' | 'after'; options: QuizPromptOption[] };
 
 export default function ChatScreen() {
   const t = useTheme();
@@ -38,7 +42,9 @@ export default function ChatScreen() {
   const profile = useSessionStore((s) => s.profile);
   const userId = useSessionStore((s) => s.user?.id);
   const { data: thread, isLoading } = useChatThread();
+  const { data: quizPrompts } = useOpenQuizPrompts();
   const sendMutation = useSendChatResponse();
+  const submitQuiz = useSubmitQuizVote();
   const listRef = useRef<FlatList>(null);
   const [error, setError] = useState<string | null>(null);
   const { refreshing, onRefresh } = useAppRefresh();
@@ -68,8 +74,46 @@ export default function ChatScreen() {
         }
       }
     }
+
+    // Quiz de sermon : baba IAssou3 pose la question (avant/après) dans le chat.
+    for (const p of quizPrompts ?? []) {
+      const intro =
+        p.phase === 'before'
+          ? 'Avant le sermon, j’aimerais ton avis 🗳️'
+          : 'Maintenant que le sermon est passé, je te repose la même question :';
+      items.push({
+        id: `quizq-${p.quizId}-${p.phase}`,
+        from: 'ai',
+        text: `${intro}\n\n${p.question}`,
+      });
+      if (p.myOptionId === null) {
+        items.push({ id: `quizopt-${p.quizId}-${p.phase}`, from: 'quiz', quizId: p.quizId, phase: p.phase, options: p.options });
+      } else {
+        items.push({ id: `quizans-${p.quizId}-${p.phase}`, from: 'user', text: p.myOptionTexte ?? '' });
+        items.push({
+          id: `quizack-${p.quizId}-${p.phase}`,
+          from: 'ai',
+          text: 'C’est noté 🙏 Tu peux voir les résultats dans l’onglet Sermons › Scoring.',
+        });
+      }
+    }
+
     return items;
-  }, [thread, profile?.prenom]);
+  }, [thread, profile?.prenom, quizPrompts]);
+
+  const hasPendingQuiz = useMemo(
+    () => (quizPrompts ?? []).some((p) => p.myOptionId === null),
+    [quizPrompts],
+  );
+
+  const handleQuizVote = async (quizId: string, phase: 'before' | 'after', optionId: string) => {
+    setError(null);
+    try {
+      await submitQuiz.mutateAsync({ quizId, phase, optionId });
+    } catch (e: any) {
+      setError(e?.message ?? "Erreur lors de l'enregistrement de ton vote.");
+    }
+  };
 
   // À la 1ère fournée (juste après mount), on marque toutes les bulles existantes
   // comme « déjà vues » pour qu'elles ne s'animent PAS en typewriter.
@@ -193,6 +237,30 @@ export default function ChatScreen() {
             // Avatar de la mascotte seulement sur la 1ère bulle AI d'une rafale
             const prev = bubbles[index - 1];
             const showAvatar = item.from === 'ai' && (!prev || prev.from !== 'ai');
+            if (item.from === 'quiz') {
+              return (
+                <View style={styles.quizOptions}>
+                  {item.options.map((o: QuizPromptOption) => (
+                    <Pressable
+                      key={o.id}
+                      onPress={() => handleQuizVote(item.quizId, item.phase, o.id)}
+                      disabled={submitQuiz.isPending}
+                      style={({ pressed }) => [
+                        styles.quizOptionBtn,
+                        {
+                          backgroundColor: t.surface,
+                          borderColor: t.border,
+                          opacity: pressed || submitQuiz.isPending ? 0.6 : 1,
+                        },
+                      ]}
+                    >
+                      <Ionicons name="ellipse-outline" size={18} color={t.textMuted} />
+                      <Text style={{ color: t.text, fontSize: font.body, flex: 1 }}>{o.texte}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              );
+            }
             if (item.from === 'ai') {
               const isThinking = 'thinking' in item && !!item.thinking;
               return (
@@ -230,7 +298,9 @@ export default function ChatScreen() {
           <View style={styles.idleWrap}>
             <View style={[styles.idleChip, { backgroundColor: t.surfaceAlt, borderColor: t.border }]}>
               <Text style={{ color: t.textMuted, textAlign: 'center', fontSize: font.caption }}>
-                Tu es à jour. baba IAssou3 te recontactera très bientôt.
+                {hasPendingQuiz
+                  ? 'Choisis ta réponse ci-dessus 👆'
+                  : 'Tu es à jour. baba IAssou3 te recontactera très bientôt.'}
               </Text>
             </View>
           </View>
@@ -260,4 +330,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   error: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  quizOptions: { gap: spacing.sm, marginVertical: spacing.xs, marginLeft: 44, marginRight: spacing.sm },
+  quizOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+  },
 });

@@ -151,9 +151,11 @@ eas build --platform ios --profile production
 eas submit --platform ios
 ```
 
+**Sentry :** les builds EAS désactivent l’upload auto des source maps (`SENTRY_DISABLE_AUTO_UPLOAD` dans `eas.json`). Les crashes remontent quand même si `EXPO_PUBLIC_SENTRY_DSN` est défini. Pour des stack traces lisibles en prod, configure plus tard `SENTRY_ORG`, `SENTRY_PROJECT` et `SENTRY_AUTH_TOKEN` sur EAS (secrets) puis retire cette variable.
+
 Checklist App Store :
 - [ ] Compte **Apple Developer** actif ($99/an)
-- [ ] App créée dans **App Store Connect** (bundle `church.suismoi.babaiassou3`)
+- [ ] App créée dans **App Store Connect** (bundle `suismoi.babaiassou3`)
 - [ ] **Sign in with Apple** activé (obligatoire car on a Google login — App Store rule 4.8)
 - [ ] Captures d'écran 6.7" + 6.5" + 5.5" (utilise [shotsnapp.com](https://shotsnapp.com) pour les composer)
 - [ ] Politique de confidentialité (URL publique) — créer une page statique simple
@@ -171,7 +173,7 @@ eas submit --platform android
 
 Checklist Play Store :
 - [ ] Compte Google Play Console ($25, paiement unique)
-- [ ] Crée l'app dans la console (package `church.suismoi.babaiassou3`)
+- [ ] Crée l'app dans la console (package `suismoi.babaiassou3`)
 - [ ] Service account JSON pour `eas submit` → `google-play-service-account.json` à la racine
 - [ ] Data safety form : collecte Email, Push token, contenu user (réponses)
 - [ ] Politique de confidentialité (même URL que iOS)

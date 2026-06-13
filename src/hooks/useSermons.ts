@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session';
@@ -26,6 +26,79 @@ export function useOpenSermons() {
   const { data: all, ...rest } = useSermons();
   const open = (all ?? []).filter((s) => s.manual_open === true);
   return { ...rest, data: open };
+}
+
+export interface ActiveSermon extends Sermon {
+  faqOpen: boolean;
+  quizId: string | null;
+  quizBeforeOpen: boolean;
+  quizAfterOpen: boolean;
+}
+
+/**
+ * Sermons « actifs » dans l'onglet Sermons : ceux dont la FAQ est ouverte OU
+ * dont le quiz a une phase (avant/après) ouverte. Sert à la visibilité de
+ * l'onglet et au sélecteur de sermon. Realtime sur sermons + sermon_quiz.
+ */
+export function useActiveSermons() {
+  const qc = useQueryClient();
+  // Nom de canal unique par instance du hook : useActiveSermons est consommé à
+  // plusieurs endroits (tab layout + écran Sermons). Supabase réutilise un canal
+  // par nom, donc un nom partagé ferait échouer le .on() après le 1er subscribe().
+  const channelId = useId();
+
+  const query = useQuery<ActiveSermon[]>({
+    queryKey: ['active-sermons'],
+    staleTime: STALE,
+    queryFn: async () => {
+      const [{ data: sermons, error: e1 }, { data: quizzes, error: e2 }] = await Promise.all([
+        supabase.from('sermons').select('*').order('debut_at', { ascending: true }),
+        supabase.from('sermon_quiz').select('id, sermon_id, before_open, after_open'),
+      ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
+
+      const quizBySermon = new Map<
+        string,
+        { id: string; before_open: boolean; after_open: boolean }
+      >();
+      for (const q of (quizzes ?? []) as {
+        id: string;
+        sermon_id: string;
+        before_open: boolean;
+        after_open: boolean;
+      }[]) {
+        quizBySermon.set(q.sermon_id, q);
+      }
+
+      return ((sermons ?? []) as Sermon[])
+        .map((s) => {
+          const q = quizBySermon.get(s.id);
+          return {
+            ...s,
+            faqOpen: s.manual_open === true,
+            quizId: q?.id ?? null,
+            quizBeforeOpen: q?.before_open === true,
+            quizAfterOpen: q?.after_open === true,
+          };
+        })
+        .filter((s) => s.faqOpen || s.quizBeforeOpen || s.quizAfterOpen);
+    },
+  });
+
+  useEffect(() => {
+    const invalidate = () => qc.invalidateQueries({ queryKey: ['active-sermons'] });
+    const channel = supabase
+      .channel(`active-sermons-${channelId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sermons' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sermon_quiz' }, invalidate)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc, channelId]);
+
+  return query;
 }
 
 export interface FaqQuestionWithLikes extends FaqQuestion {
