@@ -1,4 +1,4 @@
-# Mise en production App Store — baba IAssou3
+# Mise en production App Store — IAssou3
 
 Guide opérationnel pour la soumission. Les sections marquées 🧑‍💻 sont des actions
 **à faire par toi** dans App Store Connect (ASC) / Sentry / un hébergeur — Claude ne
@@ -53,7 +53,7 @@ pour que le reviewer puisse se connecter sans recevoir d'invitation.
 
 ## 4. Fiche App Store — textes (brouillons à ajuster) 🧑‍💻
 
-- **Nom** : baba IAssou3
+- **Nom** : IAssou3
 - **Sous-titre (30 car. max)** : `Ta conférence, en interactif`
 - **Catégorie** : Style de vie (Lifestyle) — ou Références.
 - **Classification d'âge** : viser 12+ (contenu thématique religieux).
@@ -62,7 +62,7 @@ pour que le reviewer puisse se connecter sans recevoir d'invitation.
 
 **Description (brouillon) :**
 ```
-baba IAssou3 t'accompagne pendant la conférence : réponds aux questions du jour,
+IAssou3 t'accompagne pendant la conférence : réponds aux questions du jour,
 suis tes 5 jauges (Clarté, Honnêteté, Orientation, Impartialité, X), retrouve le
 carnet de chants, le programme, le mur photos, et participe au jeu de l'ami secret.
 
