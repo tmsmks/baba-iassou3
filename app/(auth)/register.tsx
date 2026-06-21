@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, type Href } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { z } from 'zod';
 import { Screen } from '@/components/Screen';
 import { TextField } from '@/components/TextField';
@@ -16,9 +17,8 @@ const schema = z.object({
   dateNaissance: z
     .string()
     .trim()
-    .min(1, 'Ta date de naissance est requise')
-    .refine((v) => parseDateFR(v) !== null, 'Date invalide (JJ/MM/AAAA)')
-    .transform((v) => parseDateFR(v)!),
+    .refine((v) => v === '' || parseDateFR(v) !== null, 'Date invalide (JJ/MM/AAAA)')
+    .transform((v) => (v === '' ? null : parseDateFR(v))),
   email: z.string().trim().email('Email invalide'),
   password: z.string().min(6, '6 caractères minimum'),
 });
@@ -32,11 +32,16 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState(false);
 
   const computedAge = ageFromDate(parseDateFR(dateNaissance));
 
   const submit = async () => {
     setError(null);
+    if (!accepted) {
+      setError("Tu dois accepter les conditions d'utilisation pour créer un compte.");
+      return;
+    }
     const parsed = schema.safeParse({ prenom, nom, dateNaissance, email, password });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Données invalides');
@@ -59,6 +64,10 @@ export default function Register() {
       setError(error.message);
       return;
     }
+    // Enregistre l'acceptation du CLUF (cochée à l'inscription).
+    if (data.session) {
+      (supabase.rpc as any)('accept_eula').then(() => {}).catch(() => {});
+    }
     if (!data.session) {
       Alert.alert(
         'Vérifie ta boîte mail',
@@ -76,7 +85,7 @@ export default function Register() {
             <View style={styles.heroText}>
               <Text style={[styles.title, { color: t.text }]}>Bienvenue !{'\n'}Faisons connaissance.</Text>
               <Text style={[styles.sub, { color: t.textMuted }]}>
-                baba IAssou3 l'utilisera pour s'adresser personnellement à toi.
+                IAssou3 l'utilisera pour s'adresser personnellement à toi.
               </Text>
             </View>
             <Image source={assets.mascot} style={styles.mascot} resizeMode="contain" />
@@ -97,7 +106,7 @@ export default function Register() {
               autoComplete="name-family"
             />
             <TextField
-              label="Date de naissance"
+              label="Date de naissance (facultatif)"
               value={dateNaissance}
               onChangeText={(v) => setDateNaissance(maskDateFR(v))}
               keyboardType="number-pad"
@@ -127,8 +136,29 @@ export default function Register() {
               secureTextEntry
               autoComplete="password-new"
             />
+            <Pressable
+              onPress={() => setAccepted((v) => !v)}
+              style={styles.eulaRow}
+              hitSlop={6}
+            >
+              <Ionicons
+                name={accepted ? 'checkbox' : 'square-outline'}
+                size={24}
+                color={accepted ? t.primary : t.textMuted}
+              />
+              <Text style={{ color: t.textMuted, fontSize: font.caption, flex: 1, lineHeight: 18 }}>
+                J'ai lu et j'accepte les{' '}
+                <Text
+                  style={{ color: t.primary, fontWeight: '700' }}
+                  onPress={() => router.push('/eula?mode=read' as Href)}
+                >
+                  conditions d'utilisation
+                </Text>
+                .
+              </Text>
+            </Pressable>
             {error ? <Text style={{ color: t.danger, fontSize: font.caption }}>{error}</Text> : null}
-            <Button label="Créer mon compte" onPress={submit} loading={busy} />
+            <Button label="Créer mon compte" onPress={submit} loading={busy} disabled={!accepted} />
             <Button label="Retour" variant="ghost" onPress={() => router.back()} />
           </View>
         </ScrollView>
@@ -149,4 +179,10 @@ const styles = StyleSheet.create({
   mascot: { width: 110, height: 140 },
   title: { fontSize: font.display, fontWeight: '800', lineHeight: 34 },
   sub: { fontSize: font.body, marginTop: spacing.sm },
+  eulaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
 });

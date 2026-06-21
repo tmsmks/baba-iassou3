@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session';
@@ -14,13 +13,13 @@ export interface SecretMessage {
   reaction: string | null;
 }
 
-export function useSecretInbox() {
+export function useSecretInbox(options?: { enabled?: boolean }) {
   const userId = useSessionStore((s) => s.user?.id);
-  const qc = useQueryClient();
+  const enabled = (options?.enabled ?? true) && !!userId;
 
   const query = useQuery<SecretMessage[]>({
     queryKey: ['secret-inbox', userId],
-    enabled: !!userId,
+    enabled,
     queryFn: async () => {
       const { data, error } = await (supabase.rpc as any)('get_my_secret_inbox');
       if (error) throw error;
@@ -28,32 +27,11 @@ export function useSecretInbox() {
     },
   });
 
-  useEffect(() => {
-    if (!userId) return;
-    const ch = supabase
-      .channel(`secret-inbox-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'secret_messages',
-          filter: `receiver_id=eq.${userId}`,
-        },
-        () => qc.invalidateQueries({ queryKey: ['secret-inbox', userId] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [userId, qc]);
-
   return query;
 }
 
 export function useSecretOutbox() {
   const userId = useSessionStore((s) => s.user?.id);
-  const qc = useQueryClient();
 
   const query = useQuery<SecretMessage[]>({
     queryKey: ['secret-outbox', userId],
@@ -64,26 +42,6 @@ export function useSecretOutbox() {
       return (data ?? []) as SecretMessage[];
     },
   });
-
-  useEffect(() => {
-    if (!userId) return;
-    const ch = supabase
-      .channel(`secret-outbox-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'secret_messages',
-          filter: `sender_id=eq.${userId}`,
-        },
-        () => qc.invalidateQueries({ queryKey: ['secret-outbox', userId] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [userId, qc]);
 
   return query;
 }

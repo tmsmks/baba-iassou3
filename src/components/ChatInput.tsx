@@ -27,7 +27,7 @@ export function ChatInput({ disabled, sending, onSend, placeholder }: Props) {
         value={value}
         onChangeText={setValue}
         editable={!disabled && !sending}
-        placeholder={placeholder ?? 'Écris ta réponse à baba IAssou3…'}
+        placeholder={placeholder ?? 'Écris ta réponse à IAssou3…'}
         placeholderTextColor={t.textMuted}
         multiline
         keyboardAppearance={t.isDark ? 'dark' : 'light'}

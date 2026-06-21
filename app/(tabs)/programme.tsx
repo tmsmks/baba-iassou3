@@ -12,15 +12,15 @@ import {
 import { Screen } from '@/components/Screen';
 import { ProgramRow } from '@/components/ProgramItem';
 import { font, radius, spacing, useTheme } from '@/lib/theme';
-import { useProgram, useToggleFavorite, type ProgramItemWithFav } from '@/hooks/useProgram';
+import { useProgram } from '@/hooks/useProgram';
 import { useAppRefresh } from '@/hooks/useAppRefresh';
-import { useSessionStore } from '@/store/session';
+import type { ProgramItem } from '@/types/database';
 
 interface DayGroup {
   key: string; // YYYY-MM-DD
   label: string; // ex: "Vendredi"
   dateLabel: string; // ex: "3 juillet"
-  items: ProgramItemWithFav[];
+  items: ProgramItem[];
 }
 
 /** Clé locale "YYYY-MM-DD" stable peu importe le fuseau du device. */
@@ -32,8 +32,8 @@ function dayKey(iso: string): string {
   return `${y}-${m}-${day}`;
 }
 
-function groupByDay(items: ProgramItemWithFav[]): DayGroup[] {
-  const map = new Map<string, ProgramItemWithFav[]>();
+function groupByDay(items: ProgramItem[]): DayGroup[] {
+  const map = new Map<string, ProgramItem[]>();
   for (const it of items) {
     const k = dayKey(it.heure_debut);
     const arr = map.get(k) ?? [];
@@ -58,9 +58,7 @@ function groupByDay(items: ProgramItemWithFav[]): DayGroup[] {
 export default function ProgrammeScreen() {
   const t = useTheme();
   const { data, isLoading } = useProgram();
-  const toggleFav = useToggleFavorite();
   const [now, setNow] = useState(() => Date.now());
-  const userId = useSessionStore((s) => s.user?.id);
   const { refreshing, onRefresh } = useAppRefresh();
 
   useEffect(() => {
@@ -192,11 +190,7 @@ export default function ProgrammeScreen() {
           const end = new Date(item.heure_fin).getTime();
           const isLive = now >= start && now <= end;
           return (
-            <ProgramRow
-              item={item}
-              isLive={isLive}
-              onToggleFav={() => toggleFav.mutate({ programId: item.id, isFav: item.isFavorite })}
-            />
+            <ProgramRow item={item} isLive={isLive} />
           );
         }}
         ListEmptyComponent={

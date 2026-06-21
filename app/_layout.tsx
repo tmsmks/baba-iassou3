@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Stack, router, useSegments } from 'expo-router';
+import { Stack, router, useSegments, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -65,7 +65,10 @@ function Bootstrap() {
     if (session?.user) {
       wasAuthed.current = true;
       if (inAuthGroup && profile && profile.id === session.user.id) {
-        if (profile.onboarding_completed_at) {
+        if (profile.banned_at) {
+          // Compte suspendu : index.tsx affiche l'écran de suspension.
+          router.replace('/');
+        } else if (profile.onboarding_completed_at) {
           router.replace('/(tabs)/chat');
         } else {
           router.replace('/onboarding');
@@ -99,7 +102,7 @@ function Bootstrap() {
           params: { sermon_id: (data as any).sermon_id, tab: 'faq' },
         });
       } else if (data && typeof data === 'object' && (data as any).type === 'sermon_quiz') {
-        // Le vote du quiz se fait dans le chat principal (baba IAssou3 pose la question).
+        // Le vote du quiz se fait dans le chat principal (IAssou3 pose la question).
         router.push('/(tabs)/chat');
       }
     };
@@ -156,6 +159,7 @@ function RootLayout() {
             <Stack.Screen name="photos" options={{ presentation: 'modal' }} />
             <Stack.Screen name="chant" options={{ presentation: 'modal' }} />
             <Stack.Screen name="compte" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="eula" options={{ presentation: 'modal' }} />
             <Stack.Screen name="onboarding" />
           </Stack>
         </PersistQueryClientProvider>

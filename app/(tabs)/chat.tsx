@@ -19,6 +19,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Screen } from '@/components/Screen';
 import { ChatBubble } from '@/components/ChatBubble';
 import { ChatInput } from '@/components/ChatInput';
+import { FloatingPhotosButton } from '@/components/FloatingPhotosButton';
 import { font, radius, spacing, useTheme } from '@/lib/theme';
 import { useChatThread, useSendChatResponse } from '@/hooks/useChat';
 import { useOpenQuizPrompts, useSubmitQuizVote, type QuizPromptOption } from '@/hooks/useSermonQuiz';
@@ -75,7 +76,7 @@ export default function ChatScreen() {
       }
     }
 
-    // Quiz de sermon : baba IAssou3 pose la question (avant/après) dans le chat.
+    // Quiz de sermon : IAssou3 pose la question (avant/après) dans le chat.
     for (const p of quizPrompts ?? []) {
       const intro =
         p.phase === 'before'
@@ -180,7 +181,7 @@ export default function ChatScreen() {
 
   const handleSend = async (text: string) => {
     if (!pending) {
-      setError("Aucune question en attente. baba IAssou3 t'enverra bientôt la prochaine.");
+      setError("Aucune question en attente. IAssou3 t'enverra bientôt la prochaine.");
       return;
     }
     setError(null);
@@ -208,14 +209,14 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={headerHeight + tabBarHeight}
       >
-        <Image
-          source={assets.mascot}
-          style={styles.bgMascot}
-          resizeMode="contain"
+        <View
           pointerEvents="none"
+          style={StyleSheet.absoluteFill}
           accessibilityElementsHidden
           importantForAccessibility="no"
-        />
+        >
+          <Image source={assets.mascot} style={styles.bgMascot} resizeMode="contain" />
+        </View>
         <FlatList
           ref={listRef}
           data={bubbles}
@@ -292,7 +293,7 @@ export default function ChatScreen() {
           <ChatInput
             sending={sendMutation.isPending}
             onSend={handleSend}
-            placeholder="Réponds à baba IAssou3…"
+            placeholder="Réponds à IAssou3…"
           />
         ) : (
           <View style={styles.idleWrap}>
@@ -300,11 +301,12 @@ export default function ChatScreen() {
               <Text style={{ color: t.textMuted, textAlign: 'center', fontSize: font.caption }}>
                 {hasPendingQuiz
                   ? 'Choisis ta réponse ci-dessus 👆'
-                  : 'Tu es à jour. baba IAssou3 te recontactera très bientôt.'}
+                  : 'Tu es à jour. IAssou3 te recontactera très bientôt.'}
               </Text>
             </View>
           </View>
         )}
+        <FloatingPhotosButton />
       </KeyboardAvoidingView>
     </Screen>
   );
@@ -315,10 +317,10 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md },
   bgMascot: {
     position: 'absolute',
-    top: '20%',
-    left: '15%',
-    width: '70%',
-    height: '60%',
+    top: '8%',
+    left: '5%',
+    width: '90%',
+    height: '80%',
     opacity: 0.18,
   },
   idle: { padding: spacing.lg, borderTopWidth: 1 },

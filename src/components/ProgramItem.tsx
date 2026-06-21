@@ -1,12 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, Text, View } from 'react-native';
 import { font, radius, spacing, useTheme } from '@/lib/theme';
-import type { ProgramItemWithFav } from '@/hooks/useProgram';
+import type { ProgramItem } from '@/types/database';
 
 interface Props {
-  item: ProgramItemWithFav;
+  item: ProgramItem;
   isLive: boolean;
-  onToggleFav: () => void;
 }
 
 function formatHM(iso: string): string {
@@ -14,7 +12,7 @@ function formatHM(iso: string): string {
   return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
-export function ProgramRow({ item, isLive, onToggleFav }: Props) {
+export function ProgramRow({ item, isLive }: Props) {
   const t = useTheme();
   return (
     <View
@@ -53,13 +51,6 @@ export function ProgramRow({ item, isLive, onToggleFav }: Props) {
           </Text>
         ) : null}
       </View>
-      <Pressable onPress={onToggleFav} hitSlop={10} style={styles.fav}>
-        <Ionicons
-          name={item.isFavorite ? 'star' : 'star-outline'}
-          size={22}
-          color={item.isFavorite ? t.accent : t.textMuted}
-        />
-      </Pressable>
     </View>
   );
 }
@@ -85,5 +76,4 @@ const styles = StyleSheet.create({
   liveTxt: { color: '#FFFFFF', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   intervenant: { fontSize: font.caption, fontStyle: 'italic' },
   desc: { fontSize: font.caption, marginTop: spacing.xs },
-  fav: { paddingLeft: spacing.sm, justifyContent: 'center' },
 });

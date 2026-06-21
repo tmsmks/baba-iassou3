@@ -25,7 +25,7 @@ function getEasProjectId(): string | undefined {
 export async function ensureAndroidChannels(): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync('questions', {
-    name: 'Questions de baba IAssou3',
+    name: 'Questions de IAssou3',
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 200, 300, 200],
     lightColor: '#C9973A',

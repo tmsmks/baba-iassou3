@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
       if (!deliveryId) return null;
       return {
         to: t.expo_token,
-        title: `baba IAssou3 a un mot pour toi${prenom ? ', ' + prenom : ''}`,
+        title: `IAssou3 a un mot pour toi${prenom ? ', ' + prenom : ''}`,
         body: question.texte,
         sound: 'default' as const,
         priority: 'high' as const,

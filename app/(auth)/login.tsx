@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, router, type Href } from 'expo-router';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
@@ -76,12 +76,18 @@ export default function Login() {
       });
       if (!credential.identityToken) throw new Error("Apple n'a pas renvoyé d'identityToken");
       const prenom = credential.fullName?.givenName ?? undefined;
-      const { error } = await supabase.auth.signInWithIdToken({
+      const { data: signInData, error } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
         token: credential.identityToken,
-        options: prenom ? { data: { prenom } } : undefined,
       });
       if (error) throw error;
+      // Apple ne transmet le nom qu'à la 1re autorisation : on le persiste tant qu'on l'a,
+      // car signInWithIdToken ne permet pas de passer de métadonnées à la création.
+      const uid = signInData.user?.id;
+      if (prenom && uid) {
+        await supabase.auth.updateUser({ data: { prenom } });
+        await supabase.from('profiles').update({ prenom }).eq('id', uid);
+      }
     } catch (e: any) {
       if (e?.code !== 'ERR_REQUEST_CANCELED') {
         Alert.alert('Connexion Apple', e?.message ?? 'Échec');
@@ -136,6 +142,16 @@ export default function Login() {
                 </Text>
               </Pressable>
             </Link>
+            <Text style={{ color: t.textMuted, fontSize: font.micro, textAlign: 'center' }}>
+              En te connectant, tu acceptes nos{' '}
+              <Text
+                style={{ color: t.primary, fontWeight: '700' }}
+                onPress={() => router.push('/eula?mode=read' as Href)}
+              >
+                conditions d'utilisation
+              </Text>
+              .
+            </Text>
           </View>
 
           {false && (

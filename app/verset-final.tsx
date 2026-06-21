@@ -87,7 +87,7 @@ export default function VersetFinal() {
         <View style={styles.center}>
           <ActivityIndicator color={t.primary} />
           <Text style={{ color: t.textMuted, marginTop: spacing.md }}>
-            baba IAssou3 choisit un verset pour toi…
+            IAssou3 choisit un verset pour toi…
           </Text>
         </View>
       ) : error || !verse ? (
@@ -160,7 +160,7 @@ function ShareableCard({ verse, prenom }: { verse: FinalVerse; prenom: string | 
         <View style={cardStyles.divider} />
         <Text style={cardStyles.conseilLabel}>Ton conseil</Text>
         <Text style={cardStyles.conseil}>{verse.conseil}</Text>
-        <Text style={cardStyles.footer}>baba IAssou3 · Suis-Moi X 2026</Text>
+        <Text style={cardStyles.footer}>IAssou3 · Suis-Moi X 2026</Text>
       </View>
     </View>
   );

@@ -31,7 +31,7 @@ const googleServicesPath =
       : undefined;
 
 /** Nom sous l'icône sur l'écran d'accueil (iOS + Android). */
-const APP_DISPLAY_NAME = 'baba IAssou3';
+const APP_DISPLAY_NAME = 'IAssou3';
 
 const config: ExpoConfig = {
   name: APP_DISPLAY_NAME,
@@ -59,6 +59,12 @@ const config: ExpoConfig = {
       CFBundleDisplayName: APP_DISPLAY_NAME,
       CFBundleName: APP_DISPLAY_NAME,
       UIBackgroundModes: ['remote-notification'],
+      NSPhotoLibraryUsageDescription:
+        'IAssou3 accède à ta galerie uniquement quand tu choisis une image à publier sur le mur de photos de la conférence. Par exemple, tu peux sélectionner une photo prise pendant un atelier pour la partager avec les autres participants.',
+      NSPhotoLibraryAddUsageDescription:
+        "IAssou3 peut enregistrer une photo du mur dans ta galerie lorsque l'administrateur la télécharge.",
+      NSCameraUsageDescription:
+        'IAssou3 utilise la caméra uniquement quand tu prends une photo à publier sur le mur de photos de la conférence.',
     },
   },
   android: {
@@ -72,7 +78,7 @@ const config: ExpoConfig = {
         }
       : {}),
     ...(googleServicesPath ? { googleServicesFile: googleServicesPath } : {}),
-    permissions: ['NOTIFICATIONS', 'POST_NOTIFICATIONS'],
+    permissions: ['NOTIFICATIONS', 'POST_NOTIFICATIONS', 'READ_MEDIA_IMAGES', 'READ_EXTERNAL_STORAGE', 'CAMERA'],
   },
   ...(notifIconPath
     ? {
@@ -93,6 +99,15 @@ const config: ExpoConfig = {
     'expo-secure-store',
     'expo-font',
     'expo-apple-authentication',
+    [
+      'expo-image-picker',
+      {
+        photosPermission:
+          'IAssou3 accède à ta galerie uniquement quand tu choisis une image à publier sur le mur de photos de la conférence. Par exemple, tu peux sélectionner une photo prise pendant un atelier pour la partager avec les autres participants.',
+        cameraPermission:
+          'IAssou3 utilise la caméra uniquement quand tu prends une photo à publier sur le mur de photos de la conférence.',
+      },
+    ],
     [
       'expo-notifications',
       {

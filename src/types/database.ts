@@ -14,6 +14,29 @@ export interface Profile {
   is_admin: boolean;
   is_moderator: boolean;
   onboarding_completed_at: string | null;
+  eula_accepted_at: string | null;
+  banned_at: string | null;
+  created_at: string;
+}
+
+export interface BlockedUser {
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+}
+
+export interface ContentReport {
+  id: string;
+  reporter_id: string;
+  content_type: 'photo' | 'secret_message';
+  content_id: string;
+  author_id: string | null;
+  reason: string | null;
+  content_excerpt: string | null;
+  status: 'pending' | 'resolved' | 'dismissed';
+  resolution: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
   created_at: string;
 }
 
@@ -169,6 +192,22 @@ export interface PhotoLike {
   created_at: string;
 }
 
+export interface FaqLike {
+  question_id: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface SecretMessage {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  contenu: string;
+  read_at: string | null;
+  reaction: string | null;
+  created_at: string;
+}
+
 export interface ProgramItem {
   id: string;
   heure_debut: string;
@@ -188,26 +227,43 @@ export interface Chant {
   created_at: string;
 }
 
+// Le client supabase-js exige que chaque table expose Row/Insert/Update/Relationships,
+// et que le schéma expose Tables/Views/Functions ; il faut surtout que chaque Row soit
+// assignable à `Record<string, unknown>`. Une `interface` brute NE l'est PAS (pas de
+// signature d'index implicite), contrairement à un type mappé — d'où `Flatten<>`.
+// Sans ça, supabase-js dégrade silencieusement tout le schéma en `never`.
+type Flatten<T> = { [K in keyof T]: T[K] };
+
 export interface Database {
   public: {
     Tables: {
-      profiles: { Row: Profile; Insert: Partial<Profile> & { id: string; email: string; prenom: string }; Update: Partial<Profile> };
-      push_tokens: { Row: PushToken; Insert: Omit<PushToken, 'id' | 'created_at'>; Update: Partial<PushToken> };
-      questions: { Row: Question; Insert: Omit<Question, 'id' | 'created_at'>; Update: Partial<Question> };
-      question_deliveries: { Row: QuestionDelivery; Insert: Omit<QuestionDelivery, 'id' | 'sent_at'> & { sent_at?: string }; Update: Partial<QuestionDelivery> };
-      responses: { Row: ResponseRow; Insert: Omit<ResponseRow, 'id' | 'created_at'>; Update: Partial<ResponseRow> };
-      gauges: { Row: Gauges; Insert: never; Update: never };
-      final_verse: { Row: FinalVerse; Insert: Omit<FinalVerse, 'created_at'>; Update: Partial<FinalVerse> };
-      conference_state: { Row: ConferenceState; Insert: never; Update: Partial<ConferenceState> };
-      program: { Row: ProgramItem; Insert: Omit<ProgramItem, 'id'>; Update: Partial<ProgramItem> };
-      program_favorites: { Row: { user_id: string; program_id: string; created_at: string }; Insert: { user_id: string; program_id: string }; Update: never };
-      chants: { Row: Chant; Insert: Omit<Chant, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<Chant> };
-      sermons: { Row: Sermon; Insert: Omit<Sermon, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<Sermon> };
-      faq_questions: { Row: FaqQuestion; Insert: Omit<FaqQuestion, 'id' | 'created_at' | 'is_pinned' | 'is_answered'> & { id?: string; created_at?: string; is_pinned?: boolean; is_answered?: boolean }; Update: Partial<FaqQuestion> };
-      secret_friends: { Row: SecretFriend; Insert: Omit<SecretFriend, 'created_at'> & { created_at?: string }; Update: Partial<SecretFriend> };
-      sermon_quiz: { Row: SermonQuiz; Insert: Omit<SermonQuiz, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<SermonQuiz> };
-      sermon_quiz_options: { Row: SermonQuizOption; Insert: Omit<SermonQuizOption, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<SermonQuizOption> };
-      sermon_quiz_votes: { Row: SermonQuizVote; Insert: Omit<SermonQuizVote, 'id' | 'created_at' | 'updated_at'> & { id?: string; created_at?: string; updated_at?: string }; Update: Partial<SermonQuizVote> };
+      profiles: { Row: Flatten<Profile>; Insert: Partial<Profile> & { id: string; email: string; prenom: string }; Update: Partial<Profile>; Relationships: [] };
+      push_tokens: { Row: Flatten<PushToken>; Insert: Omit<PushToken, 'id' | 'created_at'>; Update: Partial<PushToken>; Relationships: [] };
+      questions: { Row: Flatten<Question>; Insert: Omit<Question, 'id' | 'created_at'>; Update: Partial<Question>; Relationships: [] };
+      question_deliveries: { Row: Flatten<QuestionDelivery>; Insert: Omit<QuestionDelivery, 'id' | 'sent_at'> & { sent_at?: string }; Update: Partial<QuestionDelivery>; Relationships: [] };
+      responses: { Row: Flatten<ResponseRow>; Insert: Omit<ResponseRow, 'id' | 'created_at'>; Update: Partial<ResponseRow>; Relationships: [] };
+      gauges: { Row: Flatten<Gauges>; Insert: never; Update: never; Relationships: [] };
+      final_verse: { Row: Flatten<FinalVerse>; Insert: Omit<FinalVerse, 'created_at'>; Update: Partial<FinalVerse>; Relationships: [] };
+      conference_state: { Row: Flatten<ConferenceState>; Insert: never; Update: Partial<ConferenceState>; Relationships: [] };
+      program: { Row: Flatten<ProgramItem>; Insert: Omit<ProgramItem, 'id'>; Update: Partial<ProgramItem>; Relationships: [] };
+      program_favorites: { Row: { user_id: string; program_id: string; created_at: string }; Insert: { user_id: string; program_id: string }; Update: never; Relationships: [] };
+      chants: { Row: Flatten<Chant>; Insert: Omit<Chant, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<Chant>; Relationships: [] };
+      sermons: { Row: Flatten<Sermon>; Insert: Omit<Sermon, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<Sermon>; Relationships: [] };
+      faq_questions: { Row: Flatten<FaqQuestion>; Insert: Omit<FaqQuestion, 'id' | 'created_at' | 'is_pinned' | 'is_answered'> & { id?: string; created_at?: string; is_pinned?: boolean; is_answered?: boolean }; Update: Partial<FaqQuestion>; Relationships: [] };
+      faq_likes: { Row: Flatten<FaqLike>; Insert: Omit<FaqLike, 'created_at'> & { created_at?: string }; Update: Partial<FaqLike>; Relationships: [] };
+      photos: { Row: Flatten<Photo>; Insert: Omit<Photo, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<Photo>; Relationships: [] };
+      photo_likes: { Row: Flatten<PhotoLike>; Insert: Omit<PhotoLike, 'created_at'> & { created_at?: string }; Update: Partial<PhotoLike>; Relationships: [] };
+      secret_messages: { Row: Flatten<SecretMessage>; Insert: Omit<SecretMessage, 'id' | 'created_at' | 'read_at' | 'reaction'> & { id?: string; created_at?: string; read_at?: string | null; reaction?: string | null }; Update: Partial<SecretMessage>; Relationships: [] };
+      secret_friends: { Row: Flatten<SecretFriend>; Insert: Omit<SecretFriend, 'created_at'> & { created_at?: string }; Update: Partial<SecretFriend>; Relationships: [] };
+      blocked_users: { Row: Flatten<BlockedUser>; Insert: Omit<BlockedUser, 'created_at'> & { created_at?: string }; Update: Partial<BlockedUser>; Relationships: [] };
+      content_reports: { Row: Flatten<ContentReport>; Insert: Omit<ContentReport, 'id' | 'created_at' | 'status' | 'resolution' | 'resolved_by' | 'resolved_at'> & { id?: string; created_at?: string }; Update: Partial<ContentReport>; Relationships: [] };
+      sermon_quiz: { Row: Flatten<SermonQuiz>; Insert: Omit<SermonQuiz, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<SermonQuiz>; Relationships: [] };
+      sermon_quiz_options: { Row: Flatten<SermonQuizOption>; Insert: Omit<SermonQuizOption, 'id' | 'created_at'> & { id?: string; created_at?: string }; Update: Partial<SermonQuizOption>; Relationships: [] };
+      sermon_quiz_votes: { Row: Flatten<SermonQuizVote>; Insert: Omit<SermonQuizVote, 'id' | 'created_at' | 'updated_at'> & { id?: string; created_at?: string; updated_at?: string }; Update: Partial<SermonQuizVote>; Relationships: [] };
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }

@@ -118,6 +118,14 @@ export function useRealtimeSync() {
           qc.invalidateQueries({ queryKey: ['photos'] });
         },
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'secret_messages' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['secret-inbox'] });
+          qc.invalidateQueries({ queryKey: ['secret-outbox'] });
+        },
+      )
       .subscribe();
 
     // Quand l'app revient au premier plan, refetch tout au cas où Realtime
@@ -142,6 +150,8 @@ export function useRealtimeSync() {
       qc.invalidateQueries({ queryKey: ['program'] });
       qc.invalidateQueries({ queryKey: ['chants'] });
       qc.invalidateQueries({ queryKey: ['photos'] });
+      qc.invalidateQueries({ queryKey: ['secret-inbox'] });
+      qc.invalidateQueries({ queryKey: ['secret-outbox'] });
     });
 
     return () => {

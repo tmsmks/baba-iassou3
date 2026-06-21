@@ -21,7 +21,7 @@ interface Props {
   lettre?: Lettre;
   score?: number | null;
   showAvatar?: boolean;
-  /** Bulle « baba IAssou3 réfléchit… » (3 dots animés + mascotte qui rebondit). */
+  /** Bulle « IAssou3 réfléchit… » (3 dots animés + mascotte qui rebondit). */
   thinking?: boolean;
   /** Anime l'apparition du texte en mode typewriter (pour la bulle qui vient d'arriver). */
   typewriter?: boolean;
@@ -116,7 +116,7 @@ export function ChatBubble({
       >
         {isAI ? (
           <View style={[styles.tag, { backgroundColor: accent }]}>
-            <Text style={styles.tagTxt}>baba IAssou3</Text>
+            <Text style={styles.tagTxt}>IAssou3</Text>
             {lettre ? <Text style={styles.tagLettre}> · {lettre}</Text> : null}
           </View>
         ) : null}

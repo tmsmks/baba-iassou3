@@ -1,11 +1,73 @@
-import { useEffect } from 'react';
-import { InteractionManager } from 'react-native';
+import { InteractionManager, Linking, Platform } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/store/session';
 import type { Photo } from '@/types/database';
+
+function canUseGallery(permission: ImagePicker.MediaLibraryPermissionResponse): boolean {
+  if (permission.granted) return true;
+  const priv = permission.accessPrivileges;
+  return priv === 'all' || priv === 'limited';
+}
+
+async function waitBeforePicker() {
+  await new Promise<void>((resolve) => {
+    InteractionManager.runAfterInteractions(() => {
+      setTimeout(resolve, Platform.OS === 'ios' ? 400 : 100);
+    });
+  });
+}
+
+async function pickFromGallery() {
+  let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
+  if (!canUseGallery(permission)) {
+    permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  }
+  if (!canUseGallery(permission)) {
+    throw new Error('GALLERY_PERMISSION_DENIED');
+  }
+
+  await waitBeforePicker();
+
+  return ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsEditing: false,
+    quality: 1,
+    exif: false,
+    selectionLimit: 1,
+  });
+}
+
+async function pickFromCamera() {
+  let permission = await ImagePicker.getCameraPermissionsAsync();
+  if (!permission.granted) {
+    permission = await ImagePicker.requestCameraPermissionsAsync();
+  }
+  if (!permission.granted) {
+    throw new Error('CAMERA_PERMISSION_DENIED');
+  }
+
+  await waitBeforePicker();
+
+  return ImagePicker.launchCameraAsync({
+    mediaTypes: ['images'],
+    allowsEditing: false,
+    quality: 1,
+    exif: false,
+  });
+}
+
+export type PhotoPickerSource = 'gallery' | 'camera';
+
+async function pickImage(source: PhotoPickerSource) {
+  return source === 'gallery' ? pickFromGallery() : pickFromCamera();
+}
+
+export async function openAppSettings() {
+  await Linking.openSettings().catch(() => {});
+}
 
 export interface PhotoWithLikes extends Photo {
   likes_count: number;
@@ -15,7 +77,6 @@ export interface PhotoWithLikes extends Photo {
 
 export function usePhotos() {
   const userId = useSessionStore((s) => s.user?.id);
-  const qc = useQueryClient();
 
   const query = useQuery<PhotoWithLikes[]>({
     queryKey: ['photos', userId],
@@ -61,22 +122,6 @@ export function usePhotos() {
       }));
     },
   });
-
-  useEffect(() => {
-    if (!userId) return;
-    const ch = supabase
-      .channel(`photos-${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'photos' }, () =>
-        qc.invalidateQueries({ queryKey: ['photos', userId] }),
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'photo_likes' }, () =>
-        qc.invalidateQueries({ queryKey: ['photos', userId] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [userId, qc]);
 
   return query;
 }
@@ -133,23 +178,16 @@ export function useUploadPhoto() {
   const userId = useSessionStore((s) => s.user?.id);
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ caption }: { caption?: string }): Promise<UploadPhotoResult> => {
+    mutationFn: async ({
+      caption,
+      source,
+    }: {
+      caption?: string;
+      source: PhotoPickerSource;
+    }): Promise<UploadPhotoResult> => {
       if (!userId) throw new Error('Non authentifié');
 
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') throw new Error('Accès photos refusé');
-
-      // Laisse finir l’animation du modal avant d’ouvrir la galerie (iOS).
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => resolve());
-      });
-
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 0.9,
-        exif: false,
-      });
+      const res = await pickImage(source);
       if (res.canceled || !res.assets?.length) return 'cancelled';
       const asset = res.assets[0];
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
@@ -114,6 +114,16 @@ export default function CompteScreen() {
               <Ionicons name="open-outline" size={18} color={t.textMuted} />
             </Pressable>
           )}
+          <Pressable
+            onPress={() => router.push('/eula?mode=read' as Href)}
+            style={[styles.linkRow, { backgroundColor: t.surface, borderColor: t.border }]}
+          >
+            <Ionicons name="document-text-outline" size={20} color={t.textMuted} />
+            <Text style={{ color: t.text, fontSize: font.body, flex: 1 }}>
+              Conditions d'utilisation
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={t.textMuted} />
+          </Pressable>
           <Pressable
             onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => {})}
             style={[styles.linkRow, { backgroundColor: t.surface, borderColor: t.border }]}

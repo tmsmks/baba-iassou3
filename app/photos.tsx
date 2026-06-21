@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,9 +26,15 @@ import {
   useTogglePhotoLike,
   useUploadPhoto,
   useDeletePhoto,
+  openAppSettings,
+  type PhotoPickerSource,
   type PhotoWithLikes,
 } from '@/hooks/usePhotos';
 import { useSessionStore } from '@/store/session';
+import { useReportContent, useBlockAuthor } from '@/hooks/useModeration';
+import { usePhotosBadge } from '@/hooks/usePhotosBadge';
+import { containsObjectionable, OBJECTIONABLE_MESSAGE } from '@/lib/moderation';
+import { downloadPhotoToDevice, openAppSettings as openDeviceSettings } from '@/lib/downloadPhoto';
 
 const SCREEN_W = Dimensions.get('window').width;
 const GAP = 4;
@@ -38,12 +44,12 @@ const TILE = Math.floor((SCREEN_W - GAP * (COLS + 1)) / COLS);
 function UploadPanel({
   caption,
   onCaptionChange,
-  onUpload,
+  onPick,
   loading,
 }: {
   caption: string;
   onCaptionChange: (v: string) => void;
-  onUpload: () => void;
+  onPick: (source: PhotoPickerSource) => void;
   loading: boolean;
 }) {
   const t = useTheme();
@@ -56,17 +62,27 @@ function UploadPanel({
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={[styles.uploadTitle, { color: t.text }]}>Publier une photo</Text>
           <Text style={[styles.uploadHint, { color: t.textMuted }]}>
-            Choisis une image dans ta galerie pour la partager sur le mur.
+            Prends une photo sur le vif ou choisis-en une dans ta galerie.
           </Text>
         </View>
       </View>
-      <Button
-        label="Choisir une photo"
-        icon={<Ionicons name="images" size={20} color={t.isDark ? t.bg : '#FFFFFF'} />}
-        onPress={onUpload}
-        loading={loading}
-        style={styles.uploadMainBtn}
-      />
+      <View style={styles.uploadBtnRow}>
+        <Button
+          label="Caméra"
+          icon={<Ionicons name="camera-outline" size={20} color={t.isDark ? t.bg : '#FFFFFF'} />}
+          onPress={() => onPick('camera')}
+          loading={loading}
+          style={styles.uploadBtn}
+        />
+        <Button
+          label="Galerie"
+          icon={<Ionicons name="images-outline" size={20} color={t.text} />}
+          onPress={() => onPick('gallery')}
+          loading={loading}
+          variant="secondary"
+          style={styles.uploadBtn}
+        />
+      </View>
       <TextInput
         value={caption}
         onChangeText={onCaptionChange}
@@ -90,25 +106,150 @@ export default function PhotosScreen() {
   const upload = useUploadPhoto();
   const toggleLike = useTogglePhotoLike();
   const del = useDeletePhoto();
+  const report = useReportContent();
+  const block = useBlockAuthor();
+  const { markPhotosSeen } = usePhotosBadge();
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
+  const [downloading, setDownloading] = useState(false);
   const { refreshing, onRefresh } = useAppRefresh();
+
+  useEffect(() => {
+    markPhotosSeen();
+  }, [markPhotosSeen]);
 
   const preview = data?.find((p) => p.id === previewId) ?? null;
 
-  const onUpload = async () => {
+  // Signalement / blocage (Guideline 1.2)
+  const onModerate = (photo: PhotoWithLikes) => {
+    Alert.alert('Modération', 'Que souhaites-tu faire ?', [
+      {
+        text: 'Signaler cette photo',
+        onPress: () =>
+          Alert.alert(
+            'Signaler cette photo ?',
+            'Notre équipe de modération la vérifiera sous 24 h et retirera tout contenu inapproprié.',
+            [
+              { text: 'Annuler', style: 'cancel' },
+              {
+                text: 'Signaler',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await report.mutateAsync({
+                      type: 'photo',
+                      contentId: photo.id,
+                      reason: 'Signalé depuis le mur de photos',
+                    });
+                    Alert.alert('Merci', 'Ton signalement a bien été transmis.');
+                  } catch (e: any) {
+                    Alert.alert('Erreur', e?.message ?? 'Échec du signalement.');
+                  }
+                },
+              },
+            ],
+          ),
+      },
+      {
+        text: "Bloquer l'auteur",
+        style: 'destructive',
+        onPress: () =>
+          Alert.alert(
+            "Bloquer cet utilisateur ?",
+            "Tu ne verras plus aucun de ses contenus, et notre équipe de modération sera notifiée.",
+            [
+              { text: 'Annuler', style: 'cancel' },
+              {
+                text: 'Bloquer',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await block.mutateAsync({ type: 'photo', contentId: photo.id });
+                    setPreviewId(null);
+                    Alert.alert('Utilisateur bloqué', "Son contenu n'apparaîtra plus dans ton fil.");
+                  } catch (e: any) {
+                    Alert.alert('Erreur', e?.message ?? 'Échec du blocage.');
+                  }
+                },
+              },
+            ],
+          ),
+      },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
+  };
+
+  const onUpload = async (source: PhotoPickerSource) => {
     if (upload.isPending) return;
+    if (containsObjectionable(caption)) {
+      Alert.alert('Contenu inapproprié', OBJECTIONABLE_MESSAGE);
+      return;
+    }
     try {
-      const result = await upload.mutateAsync({ caption: caption.trim() || undefined });
+      const result = await upload.mutateAsync({ caption: caption.trim() || undefined, source });
       if (result === 'cancelled') return;
       setCaption('');
       Alert.alert('Photo publiée', 'Ta photo est visible sur le mur.');
     } catch (e: any) {
-      if (e?.message?.includes('refusé')) {
-        Alert.alert('Permission requise', "Autorise l'accès aux photos dans les réglages.");
+      if (e?.message === 'GALLERY_PERMISSION_DENIED') {
+        Alert.alert(
+          'Accès à la galerie',
+          "Autorise l'accès à tes photos dans les réglages pour en publier une sur le mur.",
+          [
+            { text: 'Annuler', style: 'cancel' },
+            { text: 'Ouvrir les réglages', onPress: () => openAppSettings() },
+          ],
+        );
+      } else if (e?.message === 'CAMERA_PERMISSION_DENIED') {
+        Alert.alert(
+          'Accès à la caméra',
+          "Autorise l'accès à la caméra dans les réglages pour prendre une photo.",
+          [
+            { text: 'Annuler', style: 'cancel' },
+            { text: 'Ouvrir les réglages', onPress: () => openAppSettings() },
+          ],
+        );
       } else {
         Alert.alert('Erreur', e?.message ?? "Échec de l'envoi.");
       }
+    }
+  };
+
+  const showAddMenu = () => {
+    if (upload.isPending) return;
+    Alert.alert('Ajouter une photo', 'Choisis une source', [
+      { text: 'Prendre une photo', onPress: () => onUpload('camera') },
+      { text: 'Choisir dans la galerie', onPress: () => onUpload('gallery') },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
+  };
+
+  const onDownload = async (photo: PhotoWithLikes) => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const result = await downloadPhotoToDevice(photo.url);
+      Alert.alert(
+        result === 'saved' ? 'Photo enregistrée' : 'Photo partagée',
+        result === 'saved'
+          ? 'La photo a été ajoutée à ta galerie.'
+          : "Utilise « Enregistrer l'image » pour la garder sur ton téléphone.",
+      );
+    } catch (e: any) {
+      if (e?.message === 'SAVE_PERMISSION_DENIED') {
+        Alert.alert(
+          'Permission requise',
+          "Autorise l'accès à la galerie dans les réglages pour enregistrer la photo.",
+          [
+            { text: 'Annuler', style: 'cancel' },
+            { text: 'Ouvrir les réglages', onPress: () => openDeviceSettings() },
+          ],
+        );
+      } else {
+        Alert.alert('Erreur', e?.message ?? 'Impossible de télécharger la photo.');
+      }
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -134,7 +275,7 @@ export default function PhotosScreen() {
     <UploadPanel
       caption={caption}
       onCaptionChange={setCaption}
-      onUpload={onUpload}
+      onPick={onUpload}
       loading={upload.isPending}
     />
   );
@@ -147,18 +288,18 @@ export default function PhotosScreen() {
         </Pressable>
         <Text style={[styles.headerTitle, { color: t.text }]}>Mur photos</Text>
         <Pressable
-          onPress={onUpload}
+          onPress={showAddMenu}
           disabled={upload.isPending}
           style={[styles.headerPublishBtn, { backgroundColor: t.primary }]}
-          accessibilityLabel="Publier une photo"
+          accessibilityLabel="Ajouter une photo"
         >
           {upload.isPending ? (
             <ActivityIndicator color={t.isDark ? t.bg : '#FFFFFF'} size="small" />
           ) : (
             <>
-              <Ionicons name="add" size={20} color={t.isDark ? t.bg : '#FFFFFF'} />
+              <Ionicons name="add" size={22} color={t.isDark ? t.bg : '#FFFFFF'} />
               <Text style={[styles.headerPublishTxt, { color: t.isDark ? t.bg : '#FFFFFF' }]}>
-                Publier
+                Ajouter
               </Text>
             </>
           )}
@@ -259,9 +400,34 @@ export default function PhotosScreen() {
                     {preview.likes_count}
                   </Text>
                 </Pressable>
+                {isAdmin ? (
+                  <Pressable
+                    onPress={() => onDownload(preview)}
+                    hitSlop={8}
+                    style={{ padding: 8 }}
+                    disabled={downloading}
+                    accessibilityLabel="Télécharger la photo"
+                  >
+                    {downloading ? (
+                      <ActivityIndicator color={t.accent} size="small" />
+                    ) : (
+                      <Ionicons name="download-outline" size={22} color={t.accent} />
+                    )}
+                  </Pressable>
+                ) : null}
                 {preview.user_id === userId || isAdmin ? (
                   <Pressable onPress={() => onDelete(preview)} hitSlop={8} style={{ padding: 8 }}>
                     <Ionicons name="trash-outline" size={22} color={t.danger} />
+                  </Pressable>
+                ) : null}
+                {preview.user_id !== userId ? (
+                  <Pressable
+                    onPress={() => onModerate(preview)}
+                    hitSlop={8}
+                    style={{ padding: 8 }}
+                    accessibilityLabel="Signaler ou bloquer"
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={22} color={t.textMuted} />
                   </Pressable>
                 ) : null}
                 <Pressable onPress={() => setPreviewId(null)} hitSlop={8} style={{ padding: 8 }}>
@@ -313,7 +479,8 @@ const styles = StyleSheet.create({
   },
   uploadTitle: { fontSize: font.subtitle, fontWeight: '800' },
   uploadHint: { fontSize: font.caption, lineHeight: 18 },
-  uploadMainBtn: { width: '100%' },
+  uploadBtnRow: { flexDirection: 'row', gap: spacing.sm },
+  uploadBtn: { flex: 1 },
   captionInput: {
     minHeight: 44,
     paddingHorizontal: spacing.md,

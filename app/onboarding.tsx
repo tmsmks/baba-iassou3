@@ -70,7 +70,7 @@ export default function Onboarding() {
             Apprenons à nous connaître
           </Text>
           <Text style={[styles.lede, { color: t.textMuted }]}>
-            5 questions pour que baba IAssou3 personnalise tes échanges. Pas de bonne ou de mauvaise réponse — sois honnête avec toi-même.
+            5 questions pour que IAssou3 personnalise tes échanges. Pas de bonne ou de mauvaise réponse — sois honnête avec toi-même.
           </Text>
         </View>
 

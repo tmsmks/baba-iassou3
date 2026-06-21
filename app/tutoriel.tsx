@@ -11,12 +11,12 @@ const STEPS: Step[] = [
   {
     icon: 'notifications-outline',
     title: 'Reçois les questions',
-    body: "baba IAssou3 t'envoie une notification dès qu'une nouvelle question est prête. Touche-la pour ouvrir le chat directement.",
+    body: "IAssou3 t'envoie une notification dès qu'une nouvelle question est prête. Touche-la pour ouvrir le chat directement.",
   },
   {
     icon: 'chatbubble-ellipses-outline',
     title: 'Réponds dans le chat',
-    body: "Une seule réponse par question. Pas de bonne ou de mauvaise réponse — sois honnête avec toi-même. baba IAssou3 te renvoie un retour personnalisé.",
+    body: "Une seule réponse par question. Pas de bonne ou de mauvaise réponse — sois honnête avec toi-même. IAssou3 te renvoie un retour personnalisé.",
   },
   {
     icon: 'stats-chart-outline',
@@ -62,7 +62,7 @@ export default function TutorielScreen() {
         <View style={styles.mascotRow}>
           <Image source={assets.mascot} style={styles.mascot} resizeMode="contain" />
           <Text style={[styles.lede, { color: t.text }]}>
-            Bienvenue ! Voici comment fonctionne baba IAssou3.
+            Bienvenue ! Voici comment fonctionne IAssou3.
           </Text>
         </View>
 
@@ -95,7 +95,7 @@ export default function TutorielScreen() {
             ))}
           </View>
           <Text style={[styles.body, { color: t.textMuted }]}>
-            Chaque lettre représente une dimension de tes choix. baba IAssou3 t'aide à les explorer une par une.
+            Chaque lettre représente une dimension de tes choix. IAssou3 t'aide à les explorer une par une.
           </Text>
         </View>
       </ScrollView>

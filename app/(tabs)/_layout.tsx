@@ -3,11 +3,12 @@ import { Link, Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { font, spacing, useTheme } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 import { useSessionStore } from '@/store/session';
 import { useActiveSermons } from '@/hooks/useSermons';
 import { useConferenceState } from '@/hooks/useGauges';
 import { useFaqBadge } from '@/hooks/useFaqBadge';
+import { useSecretMessagesBadge } from '@/hooks/useSecretMessagesBadge';
 import { assets } from '@/lib/assets';
 
 function LogoTitle() {
@@ -16,7 +17,7 @@ function LogoTitle() {
       source={assets.logo}
       style={styles.logo}
       resizeMode="contain"
-      accessibilityLabel="baba IAssou3"
+      accessibilityLabel="IAssou3"
     />
   );
 }
@@ -46,12 +47,13 @@ export default function TabsLayout() {
   // Le badge ne concerne que la FAQ : on ne le montre que si une FAQ est ouverte.
   const hasOpenFaq = (activeSermons ?? []).some((s) => s.faqOpen);
   const showSecret = !!conf?.secret_friends_revealed;
+  const { unreadCount: secretUnreadCount } = useSecretMessagesBadge(showSecret);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: true,
-        headerStyle: { backgroundColor: t.bg, height: 100 },
+        headerStyle: { backgroundColor: t.bg, height: 110 },
         headerTintColor: t.text,
         headerTitleStyle: { fontWeight: '800' },
         headerTitleAlign: 'center',
@@ -113,33 +115,34 @@ export default function TabsLayout() {
                   <Ionicons name="person-circle-outline" size={26} color={t.text} />
                 </Pressable>
               </Link>
-              {showSecret ? (
-                <Link href="/amis-secret" asChild>
-                  <Pressable
-                    hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
-                    style={{ paddingLeft: spacing.md }}
-                    accessibilityLabel="Mon ami secret"
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="mail" size={24} color={t.accent} />
-                  </Pressable>
-                </Link>
-              ) : null}
             </View>
           ),
           headerRight: () => (
             <View style={styles.chatHeaderRight}>
-              <Pressable
-                onPress={() => navigateOnce('/photos')}
-                hitSlop={8}
-                style={[styles.photosHeaderBtn, { backgroundColor: t.primary }]}
-                accessibilityLabel="Mur photos"
-              >
-                <Ionicons name="camera" size={18} color={t.isDark ? t.bg : '#FFFFFF'} />
-                <Text style={[styles.photosHeaderBtnTxt, { color: t.isDark ? t.bg : '#FFFFFF' }]}>
-                  Photos
-                </Text>
-              </Pressable>
+              {showSecret ? (
+                <Link href="/amis-secret" asChild>
+                  <Pressable
+                    hitSlop={10}
+                    accessibilityLabel={
+                      secretUnreadCount > 0
+                        ? `Mon ami secret, ${secretUnreadCount} nouveau${secretUnreadCount > 1 ? 'x' : ''} message${secretUnreadCount > 1 ? 's' : ''}`
+                        : 'Mon ami secret'
+                    }
+                    accessibilityRole="button"
+                  >
+                    <View>
+                      <Ionicons name="mail" size={24} color={t.accent} />
+                      {secretUnreadCount > 0 ? (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeTxt}>
+                            {secretUnreadCount > 99 ? '99+' : secretUnreadCount}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                </Link>
+              ) : null}
               {showAdminButton ? (
                 <Pressable
                   onPress={() => navigateOnce('/admin')}
@@ -216,9 +219,9 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  // pointerEvents none : le logo (280px) déborde sur les icônes du headerLeft ;
+  // pointerEvents none : le logo déborde sur les icônes du headerLeft ;
   // sans ceci il capterait leurs taps et rendrait l'enveloppe quasi incliquable.
-  logo: { width: 280, height: 79, pointerEvents: 'none' },
+  logo: { width: 340, height: 96, pointerEvents: 'none' },
   headerLeftRow: { flexDirection: 'row', alignItems: 'center' },
   chatHeaderRight: {
     flexDirection: 'row',
@@ -226,13 +229,22 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingRight: 16,
   },
-  photosHeaderBtn: {
-    flexDirection: 'row',
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#E53935',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: 999,
+    justifyContent: 'center',
+    paddingHorizontal: 3,
   },
-  photosHeaderBtnTxt: { fontSize: font.caption, fontWeight: '800' },
+  badgeTxt: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+    lineHeight: 11,
+  },
 });

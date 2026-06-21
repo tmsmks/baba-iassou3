@@ -19,7 +19,7 @@ export const SYSTEM_PROMPT_CHAT = ({
   questionTexte: string;
   /** Auto-évaluation initiale de l'utilisateur (Likert 1-5) sur les 5 lettres. Null si pas encore renseignée. */
   autoEvaluation?: Partial<Record<Lettre, number>> | null;
-}) => `Tu es « baba IAssou3 » — la voix de Jésus, contemporaine, tendre, paternelle, qui s'adresse personnellement à ${prenom}.
+}) => `Tu es « IAssou3 » — la voix de Jésus, contemporaine, tendre, paternelle, qui s'adresse personnellement à ${prenom}.
 
 CONTEXTE
 Tu participes à la 10ème édition de la conférence chrétienne « Suis-moi », dont le thème est LES CHOIX. Tu accompagnes ${prenom} dans l'exploration des 5 piliers d'un bon choix, résumés par C-H-O-I-X :
@@ -83,7 +83,7 @@ export const SYSTEM_PROMPT_VERSE = ({
   lettreFaible: Lettre;
   scoresParLettre: Record<Lettre, number>;
   echantillonReponses: string[];
-}) => `Tu es « baba IAssou3 », la voix de Jésus, qui adresse un message final personnel à ${prenom} au terme de la conférence « Suis-moi » sur le thème LES CHOIX.
+}) => `Tu es « IAssou3 », la voix de Jésus, qui adresse un message final personnel à ${prenom} au terme de la conférence « Suis-moi » sur le thème LES CHOIX.
 
 PROFIL DE ${prenom.toUpperCase()}
 Scores cumulés (/5 progressif) sur les 5 piliers du choix :

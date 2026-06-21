@@ -1,4 +1,4 @@
-# baba IAssou3
+# IAssou3
 
 Application mobile de la **10ème édition** de la conférence chrétienne **« Suis-moi »** — thème **LES CHOIX**.
 
@@ -11,7 +11,7 @@ Application mobile de la **10ème édition** de la conférence chrétienne **« 
 - **Expo SDK 51** + **expo-router v3** (file-based)
 - **React Native 0.74** + TypeScript strict
 - **Supabase** (Auth, Postgres, Realtime, Edge Functions)
-- **IA** : Gemini 2.0 Flash (principal) + Groq llama-3.3-70b (fallback)
+- **IA** : OpenAI GPT-4.1-mini (principal, JSON structured outputs) + Groq llama-3.3-70b (fallback)
 - **Push** : Expo Push Service
 - **State** : Zustand + TanStack Query
 - **Animations** : Reanimated 3
@@ -30,7 +30,7 @@ Application mobile de la **10ème édition** de la conférence chrétienne **« 
 
 Tu as aussi besoin de :
 - 1 projet **Supabase** (gratuit, [supabase.com](https://supabase.com))
-- 1 clé API **Google Gemini** (gratuite, [aistudio.google.com](https://aistudio.google.com))
+- 1 clé API **OpenAI** ([platform.openai.com](https://platform.openai.com))
 - Optionnel : 1 clé API **Groq** ([console.groq.com](https://console.groq.com))
 - 1 compte **Expo** (gratuit)
 - (Pour publication) 1 compte **Apple Developer** ($99/an) + 1 compte **Google Play Developer** ($25 one-shot)
@@ -99,8 +99,8 @@ supabase functions deploy broadcast-notification
 supabase functions deploy final-verse
 
 # secrets utilisés par les fonctions
-supabase secrets set GEMINI_API_KEY=AIzaSy...
-supabase secrets set GROQ_API_KEY=gsk_...   # optionnel mais recommandé
+supabase secrets set OPENAI_API_KEY=sk-...
+supabase secrets set GROQ_API_KEY=gsk_...   # optionnel mais recommandé (fallback)
 ```
 
 (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` sont fournis automatiquement par la plateforme.)
@@ -194,16 +194,16 @@ Les changements JS-only sont déployés sans repasser par les stores.
 
 - 5 questions × 500 users = **2 500 réponses chat** + **500 versets finaux** = **3 000 appels IA**.
 - ~600 tokens entrée + 200 sortie par appel ≈ **1,8 M entrée + 0,6 M sortie**.
-- **Gemini 2.0 Flash** :
-  - tier gratuit = 15 RPM, 1 500 RPD, 1 M TPM → couvre à 99 % en lissant
-  - si dépassement, tier payant ≈ **0,32 $** pour toute la conférence
+- **OpenAI GPT-4.1-mini** :
+  - pas de tier gratuit ; tarif ≈ 0,40 $ / 1 M tokens entrée, 1,60 $ / 1 M sortie
+  - pour ~1,8 M entrée + 0,6 M sortie → ≈ **1,70 $** pour toute la conférence
 - **Groq llama-3.3-70b** (fallback) :
   - 30 RPM, 14 400 RPD gratuits → couvre tout sans coût
   - si payant : ~0,9 $ pour la conf
 - **Supabase free tier** : 500 MB DB, 2 GB egress, 500K Edge Function invocations/mois → largement suffisant
 - **Expo Push** : gratuit, illimité
 
-**Budget total estimé : 0 $ à 1 $.** Avec un compte de carte sur Google Cloud par sécurité au cas où le tier gratuit sature.
+**Budget total estimé : ~2 $ à 3 $** (essentiellement OpenAI). Prévoir une carte sur le compte OpenAI ; le fallback Groq absorbe les pics gratuitement si la clé OpenAI sature.
 
 ---
 
@@ -213,7 +213,7 @@ Les changements JS-only sont déployés sans repasser par les stores.
 notif Expo  ←──  send-question  ←──  admin clic
     │                                    │
     ▼                                    ▼
- user ouvre app  ──► chat.tsx  ──► chat-respond ──► Gemini/Groq
+ user ouvre app  ──► chat.tsx  ──► chat-respond ──► OpenAI/Groq
                           │                            │
                           └── insert response ──► trigger ──► gauges (realtime ──► jauges.tsx)
                                                                 │
@@ -236,7 +236,7 @@ supabase db reset                  # réapplique toutes les migrations + seeds
 
 ## 9. Points d'attention théologiques / UX
 
-- baba IAssou3 ne **prononce jamais** de jugement définitif. Ton paternel uniquement.
+- IAssou3 ne **prononce jamais** de jugement définitif. Ton paternel uniquement.
 - Aucune réponse de l'IA ne doit prétendre se substituer à un accompagnement humain (pasteur, conseiller). Mentionne-le dans la page « À propos » si tu en ajoutes une.
 - Les versets renvoyés par l'IA sont à vérifier par l'équipe **avant** la conférence : tester avec un compte « démo », noter les éventuelles hallucinations de référence, ajuster le system prompt si besoin (`supabase/functions/_shared/prompts.ts`).
 

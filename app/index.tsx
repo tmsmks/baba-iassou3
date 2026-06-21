@@ -118,6 +118,47 @@ export default function Index() {
     return spinner;
   }
 
+  // Utilisateurs existants sans eula_accepted_at : acceptation silencieuse en arrière-plan.
+  // Les nouveaux inscrits ont déjà accept_eula() appelé dans register.tsx.
+  if (!profile.eula_accepted_at) {
+    (supabase.rpc as any)('accept_eula').then(() => {}).catch(() => {});
+  }
+
+  // Compte suspendu pour contenu répréhensible (Guideline 1.2) : accès bloqué.
+  if (profile.banned_at) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: t.bg,
+          padding: spacing.xl,
+          gap: spacing.lg,
+        }}
+      >
+        <Text style={{ color: t.danger, fontSize: font.subtitle, fontWeight: '800', textAlign: 'center' }}>
+          Compte suspendu
+        </Text>
+        <Text style={{ color: t.textMuted, fontSize: font.body, textAlign: 'center' }}>
+          Ton compte a été suspendu pour non-respect des conditions d'utilisation (contenu
+          inapproprié). Contacte l'organisation si tu penses qu'il s'agit d'une erreur.
+        </Text>
+        <Pressable
+          onPress={() => supabase.auth.signOut()}
+          style={{
+            backgroundColor: t.primary,
+            paddingVertical: spacing.md,
+            paddingHorizontal: spacing.xl,
+            borderRadius: radius.pill,
+          }}
+        >
+          <Text style={{ color: t.bg, fontSize: font.body, fontWeight: '600' }}>Se déconnecter</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   if (!profile.onboarding_completed_at) return <Redirect href="/onboarding" />;
   return <Redirect href="/(tabs)/chat" />;
 }

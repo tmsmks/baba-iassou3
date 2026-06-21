@@ -54,12 +54,30 @@ Deno.serve(async (req) => {
 
   if (delErr || !delivery) return errorResponse(404, 'Question introuvable');
 
+  const admin = serviceClient();
+
+  // Idempotence : une seule réponse par question (delivery). Si l'utilisateur a déjà
+  // répondu, on renvoie SA réponse existante sans rappeler l'IA. Ça neutralise
+  // l'amplification de coût (retries réseau, double-tap, appels scriptés en boucle).
+  const { data: existing } = await admin
+    .from('responses')
+    .select('id, ai_feedback, score, lettre')
+    .eq('delivery_id', delivery_id)
+    .maybeSingle();
+  if (existing) {
+    return jsonResponse({
+      response_id: existing.id,
+      message: existing.ai_feedback ?? '',
+      score: existing.score ?? 0,
+      lettre: existing.lettre as Lettre,
+    });
+  }
+
   const q = (delivery as any).questions;
   const prenom = (delivery as any).profiles.prenom as string;
   const lettre = q.lettre as Lettre;
 
   // Récupère les 5 scores d'auto-évaluation (onboarding) pour contextualiser la réponse IA
-  const admin = serviceClient();
   const { data: onboardingRows } = await admin
     .from('responses')
     .select('lettre, score, questions!inner(is_onboarding)')
@@ -105,6 +123,23 @@ Deno.serve(async (req) => {
     .select('id, created_at')
     .single();
   if (insErr) {
+    // Course (deux appels quasi simultanés) : la contrainte unique sur delivery_id
+    // rejette le doublon (23505) → on renvoie la réponse gagnante plutôt qu'échouer.
+    if ((insErr as { code?: string }).code === '23505') {
+      const { data: winner } = await admin
+        .from('responses')
+        .select('id, ai_feedback, score, lettre')
+        .eq('delivery_id', delivery_id)
+        .maybeSingle();
+      if (winner) {
+        return jsonResponse({
+          response_id: winner.id,
+          message: winner.ai_feedback ?? message,
+          score: winner.score ?? score,
+          lettre: (winner.lettre as Lettre) ?? lettre,
+        });
+      }
+    }
     console.error('Insert response error', insErr);
     return errorResponse(500, 'Impossible d\'enregistrer la réponse');
   }

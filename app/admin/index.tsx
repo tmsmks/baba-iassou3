@@ -36,7 +36,7 @@ const TABS: { id: AdminTab; label: string; icon: keyof typeof Ionicons.glyphMap 
   { id: 'envoi', label: 'Envoi', icon: 'send-outline' },
   { id: 'conference', label: 'Conférence', icon: 'calendar-outline' },
   { id: 'sermons', label: 'Sermons', icon: 'help-buoy-outline' },
-  { id: 'messages', label: 'Messages', icon: 'mail-outline' },
+  { id: 'messages', label: 'Modération', icon: 'flag-outline' },
   { id: 'chants', label: 'Chants', icon: 'musical-notes-outline' },
   { id: 'users', label: 'Utilisateurs', icon: 'people-outline' },
 ];
@@ -137,7 +137,12 @@ export default function Admin() {
           </>
         )}
         {activeTab === 'sermons' && <SermonsManagerCard />}
-        {activeTab === 'messages' && <SecretMessagesModCard />}
+        {activeTab === 'messages' && (
+          <>
+            <ReportsModCard />
+            <SecretMessagesModCard />
+          </>
+        )}
         {activeTab === 'chants' && <ChantsManagerCard />}
         {activeTab === 'users' && (
           <>
@@ -474,9 +479,11 @@ function ConferenceStateCard() {
   ) => {
     if (!state) return;
     setSaving(busy);
+    const patch: Partial<ConferenceState> = { updated_at: new Date().toISOString() };
+    patch[key] = val;
     const { error } = await supabase
       .from('conference_state')
-      .update({ [key]: val, updated_at: new Date().toISOString() })
+      .update(patch)
       .eq('id', true);
     setSaving(null);
     if (error) Alert.alert('Erreur', error.message);
@@ -1833,13 +1840,15 @@ function ResetConversationsCard() {
         qc.setQueryData(['chat-thread', currentUserId], []);
         qc.invalidateQueries({ queryKey: ['chat-thread', currentUserId] });
         qc.invalidateQueries({ queryKey: ['gauges', currentUserId] });
-        // Refetch le profil pour récupérer onboarding_completed_at backfillé par le RPC
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', currentUserId)
-          .maybeSingle();
-        if (prof) setProfile(prof as any);
+        if (currentUserId) {
+          // Refetch le profil pour récupérer onboarding_completed_at backfillé par le RPC
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', currentUserId)
+            .maybeSingle();
+          if (prof) setProfile(prof as any);
+        }
       }
       Alert.alert(
         'Conversations réinitialisées',
@@ -2107,6 +2116,171 @@ interface AdminSecretMessage {
   sender_nom: string;
   receiver_prenom: string;
   receiver_nom: string;
+}
+
+interface AdminReport {
+  id: string;
+  content_type: 'photo' | 'secret_message';
+  content_id: string;
+  reason: string | null;
+  content_excerpt: string | null;
+  status: 'pending' | 'resolved' | 'dismissed';
+  created_at: string;
+  reporter_prenom: string | null;
+  author_id: string | null;
+  author_prenom: string | null;
+  author_nom: string | null;
+  author_banned: boolean;
+}
+
+function ReportsModCard() {
+  const t = useTheme();
+  const [reports, setReports] = useState<AdminReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const fetchReports = async () => {
+    setLoading(true);
+    const { data, error } = await (supabase.rpc as any)('admin_list_reports');
+    if (!error && data) setReports(data as AdminReport[]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchReports();
+  }, []);
+
+  const resolve = async (report: AdminReport, action: 'remove_content' | 'ban_author' | 'dismiss') => {
+    setBusyId(report.id);
+    try {
+      const { error } = await (supabase.rpc as any)('admin_resolve_report', {
+        p_report_id: report.id,
+        p_action: action,
+      });
+      if (error) throw error;
+      await fetchReports();
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message ?? 'Échec');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const onResolve = (report: AdminReport) => {
+    const authorLabel = `${report.author_prenom ?? '?'} ${report.author_nom ?? ''}`.trim();
+    Alert.alert(
+      'Traiter ce signalement',
+      `Contenu ${report.content_type === 'photo' ? 'photo' : 'message'} de ${authorLabel}.`,
+      [
+        {
+          text: 'Retirer le contenu',
+          style: 'destructive',
+          onPress: () => resolve(report, 'remove_content'),
+        },
+        {
+          text: "Retirer + bannir l'auteur",
+          style: 'destructive',
+          onPress: () =>
+            Alert.alert(
+              'Bannir cet utilisateur ?',
+              `${authorLabel} sera exclu : son contenu est retiré et il ne pourra plus accéder à l'app.`,
+              [
+                { text: 'Annuler', style: 'cancel' },
+                { text: 'Bannir', style: 'destructive', onPress: () => resolve(report, 'ban_author') },
+              ],
+            ),
+        },
+        { text: 'Ignorer le signalement', onPress: () => resolve(report, 'dismiss') },
+        { text: 'Annuler', style: 'cancel' },
+      ],
+    );
+  };
+
+  const pending = reports.filter((r) => r.status === 'pending');
+
+  return (
+    <View style={[card(t)]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={[h2(t)]}>Signalements{pending.length > 0 ? ` · ${pending.length}` : ''}</Text>
+        <Pressable onPress={fetchReports} hitSlop={10}>
+          <Ionicons name="refresh" size={20} color={t.textMuted} />
+        </Pressable>
+      </View>
+      <Text style={{ color: t.textMuted, fontSize: font.caption }}>
+        À traiter sous 24 h : retire le contenu inapproprié et bannis l'auteur si besoin.
+      </Text>
+
+      {loading ? (
+        <ActivityIndicator color={t.primary} style={{ marginTop: spacing.md }} />
+      ) : reports.length === 0 ? (
+        <Text style={{ color: t.textMuted, textAlign: 'center', marginTop: spacing.md }}>
+          Aucun signalement. 🎉
+        </Text>
+      ) : (
+        <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+          {reports.map((r) => {
+            const resolved = r.status !== 'pending';
+            return (
+              <View
+                key={r.id}
+                style={{
+                  backgroundColor: t.surfaceAlt,
+                  borderRadius: radius.md,
+                  padding: spacing.md,
+                  gap: 6,
+                  opacity: resolved ? 0.55 : 1,
+                  borderWidth: 1,
+                  borderColor: r.author_banned ? t.danger : t.border,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons
+                    name={r.content_type === 'photo' ? 'image-outline' : 'mail-outline'}
+                    size={14}
+                    color={t.accent}
+                  />
+                  <Text style={{ color: t.accent, fontSize: font.micro, fontWeight: '700', flex: 1 }}>
+                    {r.content_type === 'photo' ? 'Photo' : 'Message'} de{' '}
+                    {r.author_prenom ?? '?'} {r.author_nom ?? ''}
+                    {r.author_banned ? ' · BANNI' : ''}
+                  </Text>
+                  <Text style={{ color: t.textMuted, fontSize: font.micro }}>
+                    {new Date(r.created_at).toLocaleString('fr-FR', {
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                </View>
+                {r.content_excerpt ? (
+                  <Text style={{ color: t.text, fontSize: font.body, lineHeight: 20 }} numberOfLines={3}>
+                    « {r.content_excerpt} »
+                  </Text>
+                ) : null}
+                <Text style={{ color: t.textMuted, fontSize: font.micro }}>
+                  Motif : {r.reason ?? '—'} · signalé par {r.reporter_prenom ?? '?'}
+                </Text>
+                {resolved ? (
+                  <Text style={{ color: t.success, fontSize: font.micro, fontWeight: '700' }}>
+                    {r.status === 'resolved' ? 'Traité ✓' : 'Ignoré'}
+                  </Text>
+                ) : (
+                  <Button
+                    label={busyId === r.id ? 'Traitement…' : 'Traiter'}
+                    onPress={() => onResolve(r)}
+                    loading={busyId === r.id}
+                    variant="secondary"
+                    style={{ height: 40, marginTop: 4 }}
+                  />
+                )}
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
 }
 
 function SecretMessagesModCard() {

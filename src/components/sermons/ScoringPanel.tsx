@@ -16,7 +16,7 @@ const LETTER_LABEL: Record<Lettre, string> = {
 /**
  * Panneau Scoring (lecture seule) : affiche les histogrammes des réponses de
  * tous les utilisateurs, un AVANT et un APRÈS le sermon. Le vote lui-même se
- * fait dans le chat principal (baba IAssou3 pose la question).
+ * fait dans le chat principal (IAssou3 pose la question).
  */
 export function ScoringPanel({ sermon }: { sermon: ActiveSermon }) {
   const t = useTheme();

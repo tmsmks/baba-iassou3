@@ -31,6 +31,8 @@ import {
   useReactToSecretMessage,
   SECRET_REACTIONS,
 } from '@/hooks/useSecretMessages';
+import { useReportContent, useBlockAuthor } from '@/hooks/useModeration';
+import { containsObjectionable, OBJECTIONABLE_MESSAGE } from '@/lib/moderation';
 
 type SubTab = 'mission' | 'inbox' | 'outbox';
 
@@ -66,9 +68,18 @@ export default function AmiSecret() {
   const revealed = !!conf?.secret_friends_revealed;
   const unread = useMemo(() => (inbox ?? []).filter((m) => !m.read_at).length, [inbox]);
 
+  useEffect(() => {
+    if (!revealed || !inbox) return;
+    inbox.filter((m) => !m.read_at).forEach((m) => markRead.mutate(m.id));
+  }, [revealed, inbox]);
+
   const send = async () => {
     const text = draft.trim();
     if (text.length < 1 || !friend) return;
+    if (containsObjectionable(text)) {
+      Alert.alert('Contenu inapproprié', OBJECTIONABLE_MESSAGE);
+      return;
+    }
     try {
       await sendMsg.mutateAsync({ receiverId: friend.receiver_id, contenu: text });
       setDraft('');
@@ -301,6 +312,66 @@ function InboxList({
   onRefresh: () => void;
 }) {
   const react = useReactToSecretMessage();
+  const report = useReportContent();
+  const block = useBlockAuthor();
+
+  const onModerate = (messageId: string) => {
+    Alert.alert('Modération', 'Que souhaites-tu faire de ce message ?', [
+      {
+        text: 'Signaler ce message',
+        onPress: () =>
+          Alert.alert(
+            'Signaler ce message ?',
+            'Notre équipe de modération le vérifiera sous 24 h et retirera tout contenu inapproprié.',
+            [
+              { text: 'Annuler', style: 'cancel' },
+              {
+                text: 'Signaler',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await report.mutateAsync({
+                      type: 'secret_message',
+                      contentId: messageId,
+                      reason: "Signalé depuis la boîte de l'ami secret",
+                    });
+                    Alert.alert('Merci', 'Ton signalement a bien été transmis.');
+                  } catch (e: any) {
+                    Alert.alert('Erreur', e?.message ?? 'Échec du signalement.');
+                  }
+                },
+              },
+            ],
+          ),
+      },
+      {
+        text: "Bloquer l'expéditeur",
+        style: 'destructive',
+        onPress: () =>
+          Alert.alert(
+            "Bloquer cet expéditeur ?",
+            "Tu ne recevras plus aucun message de cette personne, et notre équipe de modération sera notifiée.",
+            [
+              { text: 'Annuler', style: 'cancel' },
+              {
+                text: 'Bloquer',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await block.mutateAsync({ type: 'secret_message', contentId: messageId });
+                    Alert.alert('Expéditeur bloqué', 'Ses messages ne s\'afficheront plus.');
+                  } catch (e: any) {
+                    Alert.alert('Erreur', e?.message ?? 'Échec du blocage.');
+                  }
+                },
+              },
+            ],
+          ),
+      },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -347,6 +418,14 @@ function InboxList({
                 minute: '2-digit',
               })}
             </Text>
+            <Pressable
+              onPress={() => onModerate(item.id)}
+              hitSlop={8}
+              style={{ paddingLeft: 6 }}
+              accessibilityLabel="Signaler ou bloquer"
+            >
+              <Ionicons name="ellipsis-horizontal" size={16} color={t.textMuted} />
+            </Pressable>
           </View>
           <Text style={{ color: t.text, fontSize: font.body, lineHeight: 22 }}>{item.contenu}</Text>
           <View style={[styles.reactionsRow, { borderTopColor: t.border }]}>
